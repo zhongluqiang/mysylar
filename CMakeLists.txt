@@ -34,7 +34,7 @@ force_redefine_file_macro_for_sources(sylar)
 add_executable(test_log tests/test_log.cpp)
 force_redefine_file_macro_for_sources(test_log)
 add_dependencies(test_log sylar)
-target_link_libraries(test_log sylar)
+target_link_libraries(test_log sylar ${YAMLCPP})
 
 #yaml-cpp库测试
 add_executable(test_yaml tests/test_yaml.cpp)
