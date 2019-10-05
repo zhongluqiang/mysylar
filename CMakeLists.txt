@@ -17,6 +17,8 @@ find_library(YAMLCPP yaml-cpp)
 set(
     LIB_SRC
 
+    sylar/config.h 
+    sylar/config.cpp
     sylar/log.h 
     sylar/log.cpp
     sylar/singleton.h 
@@ -38,6 +40,12 @@ target_link_libraries(test_log sylar)
 add_executable(test_yaml tests/test_yaml.cpp)
 force_redefine_file_macro_for_sources(test_yaml)
 target_link_libraries(test_yaml ${YAMLCPP})
+
+#配置管理类测试
+add_executable(test_config tests/test_config.cpp)
+force_redefine_file_macro_for_sources(test_config)
+add_dependencies(test_config sylar)
+target_link_libraries(test_config sylar ${YAMLCPP})
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
