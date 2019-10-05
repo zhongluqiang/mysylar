@@ -12,6 +12,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-function -Wno-builtin-macro-
 
 include_directories(.)
 
+find_library(YAMLCPP yaml-cpp)
+
 set(
     LIB_SRC
 
@@ -31,6 +33,11 @@ add_executable(test_log tests/test_log.cpp)
 force_redefine_file_macro_for_sources(test_log)
 add_dependencies(test_log sylar)
 target_link_libraries(test_log sylar)
+
+#yaml-cpp库测试
+add_executable(test_yaml tests/test_yaml.cpp)
+force_redefine_file_macro_for_sources(test_yaml)
+target_link_libraries(test_yaml ${YAMLCPP})
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
