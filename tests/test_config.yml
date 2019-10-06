@@ -4,3 +4,4 @@ system:
     int_vec:
         - 10
         - 30
+    int_list: [20, 40, 50]

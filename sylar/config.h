@@ -78,6 +78,36 @@ public:
     }
 };
 
+// list偏特化，实现将YAML格式的string转成list
+template <class T> class LexicalCast<std::string, std::list<T>> {
+public:
+    std::list<T> operator()(const std::string &v) {
+        YAML::Node node = YAML::Load(v);
+        typename std::list<T> vec;
+        std::stringstream ss;
+        for (size_t i = 0; i < node.size(); ++i) {
+            ss.str("");
+            ss << node[i];
+            vec.push_back(LexicalCast<std::string, T>()(ss.str()));
+        }
+        return vec;
+    }
+};
+
+// list偏特化，实现将list转成YAML格式的string
+template <class T> class LexicalCast<std::list<T>, std::string> {
+public:
+    std::string operator()(const std::list<T> &v) {
+        YAML::Node node;
+        for (auto &i : v) {
+            node.push_back(YAML::Load(LexicalCast<T, std::string>()(i)));
+        }
+        std::stringstream ss;
+        ss << node;
+        return ss.str();
+    }
+};
+
 //具体的配置项，定义成模板类，以适应不同的配置类型
 template <class T, class FromStr = LexicalCast<std::string, T>,
           class ToStr = LexicalCast<T, std::string>>
