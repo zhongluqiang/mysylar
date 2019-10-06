@@ -6,6 +6,7 @@
 #include <cstdarg> //for va_list
 #include <cstdint>
 #include <fstream>
+#include <iostream>
 #include <list>
 #include <map>
 #include <memory>
@@ -30,6 +31,7 @@
 namespace sylar {
 
 class Logger;
+class LoggerManager;
 
 //日志级别
 class LogLevel {
@@ -44,6 +46,7 @@ public:
     };
 
     static const char *ToString(LogLevel::Level level);
+    static LogLevel::Level FromString(const std::string &str);
 };
 
 //日志事件
@@ -101,6 +104,8 @@ public:
     std::string format(std::shared_ptr<Logger> logger, LogLevel::Level level,
                        LogEvent::ptr);
     void init();
+    bool isError() const { return m_error; }
+    const std::string getPattern() const { return m_pattern; }
 
 public:
     class FormatItem {
@@ -116,6 +121,7 @@ public:
 private:
     std::string m_pattern;
     std::vector<FormatItem::ptr> m_items;
+    bool m_error = false; // pattern解析出错标志，暂未使用
 };
 
 //日志输出地
@@ -126,6 +132,8 @@ public:
 
     virtual void log(std::shared_ptr<Logger> logger, LogLevel::Level level,
                      LogEvent::ptr event) = 0;
+    virtual std::string toYamlString()    = 0;
+
     void setFormater(LogFormatter::ptr val) { m_formatter = val; }
     LogFormatter::ptr getFormatter() const { return m_formatter; }
     LogLevel::Level getLevel() const { return m_level; }
@@ -142,6 +150,7 @@ public:
     typedef std::shared_ptr<StdoutLogAppender> ptr;
     void log(std::shared_ptr<Logger> logger, LogLevel::Level level,
              LogEvent::ptr event) override;
+    std::string toYamlString() override;
 };
 
 //输出到文件的Appender
@@ -152,6 +161,7 @@ public:
     void log(std::shared_ptr<Logger> logger, LogLevel::Level level,
              LogEvent::ptr event) override;
     bool reopen();
+    std::string toYamlString() override;
 
 private:
     std::string m_filename;
@@ -160,6 +170,9 @@ private:
 
 // Logger类继承至enable_shared_from_this以便于获取自身的智能指针
 class Logger : public std::enable_shared_from_this<Logger> {
+    // LoggerManager在创建Logger对象时会修改Logger的私有成员，故增加友元类的声明
+    friend class LoggerManager;
+
 public:
     typedef std::shared_ptr<Logger> ptr;
 
@@ -174,30 +187,48 @@ public:
 
     void addAppender(LogAppender::ptr appender);
     void delAppender(LogAppender::ptr appender);
+    void clearAppenders();
     LogLevel::Level getLevel() const { return m_level; }
     void setLevel(LogLevel::Level val) { m_level = val; }
 
     const std::string &getName() const { return m_name; }
+
+    void setFormatter(LogFormatter::ptr val);
+    void setFormatter(const std::string &val);
+    LogFormatter::ptr getFormatter();
+    std::string toYamlString();
 
 private:
     std::string m_name;
     LogLevel::Level m_level;
     std::list<LogAppender::ptr> m_appenders;
     LogFormatter::ptr m_formatter;
+    Logger::ptr m_root;
 };
 
 class LoggerManager {
 public:
     LoggerManager() {
-        m_root.reset(new Logger("root"));
+        m_root.reset(new Logger); // Logger类构造函数带默认参数"root"
         m_root->addAppender(LogAppender::ptr(new StdoutLogAppender));
+
+        m_loggers[m_root->m_name] = m_root;
     }
     Logger::ptr getLogger(const std::string &name) {
         auto it = m_loggers.find(name);
-        return it == m_loggers.end() ? m_root : it->second;
+        // return it == m_loggers.end() ? m_root : it->second;
+        if (it != m_loggers.end()) {
+            return it->second;
+        }
+        // std::cout << "add new logger:" << name << std::endl;
+        Logger::ptr logger(new Logger(name));
+        logger->m_root  = m_root;
+        m_loggers[name] = logger;
+        return logger;
     }
     void init();
     Logger::ptr getRoot() const { return m_root; }
+    std::string toYamlString();
 
 private:
     std::map<std::string, Logger::ptr> m_loggers;
@@ -207,6 +238,7 @@ private:
 typedef sylar::Singleton<LoggerManager> LoggerMgr;
 
 #define SYLAR_LOG_ROOT() sylar::LoggerMgr::GetInstance()->getRoot()
+#define SYLAR_LOG_NAME(name) sylar::LoggerMgr::GetInstance()->getLogger(name)
 
 } // end namespace sylar
 
