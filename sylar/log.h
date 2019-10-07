@@ -2,6 +2,7 @@
 #define MYSYLAR_LOG_H
 
 #include "singleton.h"
+#include "thread.h"
 #include "util.h"
 #include <cstdarg> //for va_list
 #include <cstdint>
@@ -126,22 +127,27 @@ private:
 
 //日志输出地
 class LogAppender {
+    friend class Logger;
+
 public:
     typedef std::shared_ptr<LogAppender> ptr;
+    typedef Spinlock MutexType;
     virtual ~LogAppender() {}
 
     virtual void log(std::shared_ptr<Logger> logger, LogLevel::Level level,
                      LogEvent::ptr event) = 0;
     virtual std::string toYamlString()    = 0;
 
-    void setFormater(LogFormatter::ptr val) { m_formatter = val; }
-    LogFormatter::ptr getFormatter() const { return m_formatter; }
+    void setFormater(LogFormatter::ptr val);
+    LogFormatter::ptr getFormatter();
     LogLevel::Level getLevel() const { return m_level; }
     void setLevel(LogLevel::Level val) { m_level = val; }
 
 protected: //继承的子类需要访问这些成员，只能声明成protected类型
     LogLevel::Level m_level = LogLevel::DEBUG;
     LogFormatter::ptr m_formatter;
+    bool m_hasFormatter = false;
+    MutexType m_mutex;
 };
 
 //输出到控制台的Appender
@@ -175,6 +181,7 @@ class Logger : public std::enable_shared_from_this<Logger> {
 
 public:
     typedef std::shared_ptr<Logger> ptr;
+    typedef Spinlock MutexType;
 
     Logger(const std::string &name = "root");
     void log(LogLevel::Level level, LogEvent::ptr event);
@@ -204,28 +211,19 @@ private:
     std::list<LogAppender::ptr> m_appenders;
     LogFormatter::ptr m_formatter;
     Logger::ptr m_root;
+    MutexType m_mutex;
 };
 
 class LoggerManager {
 public:
+    typedef Spinlock MutexType;
     LoggerManager() {
         m_root.reset(new Logger); // Logger类构造函数带默认参数"root"
         m_root->addAppender(LogAppender::ptr(new StdoutLogAppender));
 
         m_loggers[m_root->m_name] = m_root;
     }
-    Logger::ptr getLogger(const std::string &name) {
-        auto it = m_loggers.find(name);
-        // return it == m_loggers.end() ? m_root : it->second;
-        if (it != m_loggers.end()) {
-            return it->second;
-        }
-        // std::cout << "add new logger:" << name << std::endl;
-        Logger::ptr logger(new Logger(name));
-        logger->m_root  = m_root;
-        m_loggers[name] = logger;
-        return logger;
-    }
+    Logger::ptr getLogger(const std::string &name);
     void init();
     Logger::ptr getRoot() const { return m_root; }
     std::string toYamlString();
@@ -233,6 +231,7 @@ public:
 private:
     std::map<std::string, Logger::ptr> m_loggers;
     Logger::ptr m_root;
+    MutexType m_mutex;
 };
 
 typedef sylar::Singleton<LoggerManager> LoggerMgr;

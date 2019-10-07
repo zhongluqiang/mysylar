@@ -263,6 +263,21 @@ void LogFormatter::init() {
     }
 }
 
+void LogAppender::setFormater(LogFormatter::ptr val) {
+    MutexType::Lock lock(m_mutex);
+    m_formatter = val;
+    if (m_formatter) {
+        m_hasFormatter = true;
+    } else {
+        m_hasFormatter = false;
+    }
+}
+
+LogFormatter::ptr LogAppender::getFormatter() {
+    MutexType::Lock lock(m_mutex);
+    return m_formatter;
+}
+
 std::string LogFormatter::format(std::shared_ptr<Logger> logger,
                                  LogLevel::Level level, LogEvent::ptr event) {
     std::stringstream ss;
@@ -294,6 +309,7 @@ std::string StdoutLogAppender::toYamlString() {
 }
 
 bool FileLogAppender::reopen() {
+    MutexType::Lock lock(m_mutex);
     if (m_filestream) {
         m_filestream.close();
     }
@@ -309,12 +325,15 @@ FileLogAppender::FileLogAppender(const std::string &filename)
 
 void FileLogAppender::log(Logger::ptr logger, LogLevel::Level level,
                           LogEvent::ptr event) {
+
     if (level >= LogAppender::m_level) {
+        MutexType::Lock lock(m_mutex);
         m_filestream << LogAppender::m_formatter->format(logger, level, event);
     }
 }
 
 std::string FileLogAppender::toYamlString() {
+    MutexType::Lock lock(m_mutex);
     YAML::Node node;
     node["type"] = "FileLogAppender";
     node["file"] = m_filename;
@@ -340,6 +359,7 @@ Logger::Logger(const std::string &name)
 // 某个logger没有appender时，使用root logger进行输出 ？？
 void Logger::log(LogLevel::Level level, LogEvent::ptr event) {
     if (level > m_level) {
+        MutexType::Lock lock(m_mutex);
         auto self = shared_from_this();
         if (!m_appenders.empty()) {
             for (auto &i : m_appenders) {
@@ -362,6 +382,7 @@ void Logger::error(sylar::LogEvent::ptr event) { log(LogLevel::ERROR, event); }
 void Logger::fatal(sylar::LogEvent::ptr event) { log(LogLevel::FATAL, event); }
 
 void Logger::addAppender(sylar::LogAppender::ptr appender) {
+    MutexType::Lock lock(m_mutex);
     if (!appender->getFormatter()) {
         appender->setFormater(m_formatter);
     }
@@ -369,6 +390,7 @@ void Logger::addAppender(sylar::LogAppender::ptr appender) {
 }
 
 void Logger::delAppender(sylar::LogAppender::ptr appender) {
+    MutexType::Lock lock(m_mutex);
     for (auto it = m_appenders.begin(); it != m_appenders.end(); ++it) {
         if (*it == appender) {
             m_appenders.erase(it);
@@ -376,9 +398,22 @@ void Logger::delAppender(sylar::LogAppender::ptr appender) {
     }
 }
 
-void Logger::clearAppenders() { m_appenders.clear(); }
+void Logger::clearAppenders() {
+    MutexType::Lock lock(m_mutex);
+    m_appenders.clear();
+}
 
-void Logger::setFormatter(LogFormatter::ptr val) { m_formatter = val; }
+void Logger::setFormatter(LogFormatter::ptr val) {
+    MutexType::Lock lock(m_mutex);
+
+    m_formatter = val;
+    for (auto &i : m_appenders) {
+        MutexType::Lock ll(i->m_mutex);
+        if (!i->m_hasFormatter) {
+            i->m_formatter = m_formatter;
+        }
+    }
+}
 
 void Logger::setFormatter(const std::string &val) {
     LogFormatter::ptr new_val(new LogFormatter(val));
@@ -390,9 +425,13 @@ void Logger::setFormatter(const std::string &val) {
     m_formatter = new_val;
 }
 
-LogFormatter::ptr Logger::getFormatter() { return m_formatter; }
+LogFormatter::ptr Logger::getFormatter() {
+    MutexType::Lock lock(m_mutex);
+    return m_formatter;
+}
 
 std::string Logger::toYamlString() {
+    MutexType::Lock lock(m_mutex);
     YAML::Node node;
     node["name"] = m_name;
     if (m_level != LogLevel::UNKNOWN) {
@@ -410,7 +449,21 @@ std::string Logger::toYamlString() {
     return ss.str();
 }
 
+Logger::ptr LoggerManager::getLogger(const std::string &name) {
+    MutexType::Lock lock(m_mutex);
+    auto it = m_loggers.find(name);
+    if (it != m_loggers.end()) {
+        return it->second;
+    }
+
+    Logger::ptr logger(new Logger(name));
+    logger->m_root  = m_root;
+    m_loggers[name] = logger;
+    return logger;
+}
+
 std::string LoggerManager::toYamlString() {
+    MutexType::Lock lock(m_mutex);
     YAML::Node node;
     for (auto &i : m_loggers) {
         node.push_back(YAML::Load(i.second->toYamlString()));
