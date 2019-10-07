@@ -10,7 +10,10 @@ void func1() { func2(); }
 
 void test_backtrace() { func1(); }
 
+void test_macro() { SYLAR_ASSERT(0); }
+
 int main() {
     test_backtrace();
+    test_macro();
     return 0;
 }
