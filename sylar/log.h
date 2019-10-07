@@ -172,6 +172,7 @@ public:
 private:
     std::string m_filename;
     std::ofstream m_filestream;
+    uint64_t m_lastTime = 0;
 };
 
 // Logger类继承至enable_shared_from_this以便于获取自身的智能指针

@@ -327,6 +327,12 @@ void FileLogAppender::log(Logger::ptr logger, LogLevel::Level level,
                           LogEvent::ptr event) {
 
     if (level >= LogAppender::m_level) {
+        uint64_t now = time(0);
+        //每一秒重新打开一次文件，保证在日志文件被删除的情况下可以重新创建文件
+        if (now != m_lastTime) {
+            reopen();
+            m_lastTime = now;
+        }
         MutexType::Lock lock(m_mutex);
         m_filestream << LogAppender::m_formatter->format(logger, level, event);
     }
