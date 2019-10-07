@@ -1,6 +1,7 @@
 #ifndef MYSYLAR_THREAD_H
 #define MYSYLAR_THREAD_H
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <pthread.h>
@@ -166,6 +167,29 @@ public:
 
 private:
     pthread_spinlock_t m_mutex;
+};
+
+//使用atomic_flag在用户空间实现的自旋锁
+class AtomicSpinlock {
+public:
+    typedef ScopedLockImpl<AtomicSpinlock> Lock;
+
+    AtomicSpinlock() { m_mutex.clear(); }
+
+    ~AtomicSpinlock() {}
+
+    void lock() {
+        while (std::atomic_flag_test_and_set_explicit(
+            &m_mutex, std::memory_order_acquire))
+            ;
+    }
+
+    void unlock() {
+        std::atomic_flag_clear_explicit(&m_mutex, std::memory_order_release);
+    }
+
+private:
+    volatile std::atomic_flag m_mutex;
 };
 
 class Thread {
