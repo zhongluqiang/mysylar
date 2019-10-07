@@ -12,11 +12,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-function -Wno-builtin-macro-
 
 include_directories(.)
 
-find_library(YAMLCPP yaml-cpp)
-
 set(
     LIB_SRC
 
+    sylar/thread.h 
+    sylar/thread.cpp
     sylar/config.h 
     sylar/config.cpp
     sylar/log.h 
@@ -26,26 +26,40 @@ set(
     sylar/util.cpp
     )
 
+set(
+    LIBS 
+
+    sylar 
+    yaml-cpp 
+    pthread
+)
+
 add_library(sylar SHARED ${LIB_SRC})
 #该函数将sylar这个目标的全部源代码内的__FILE__宏进行重新定义，去掉绝对路径，改用相对路径
-force_redefine_file_macro_for_sources(sylar)
+#force_redefine_file_macro_for_sources(sylar)
 
 #日志类测试
 add_executable(test_log tests/test_log.cpp)
-force_redefine_file_macro_for_sources(test_log)
+#force_redefine_file_macro_for_sources(test_log)
 add_dependencies(test_log sylar)
-target_link_libraries(test_log sylar ${YAMLCPP})
+target_link_libraries(test_log ${LIBS})
 
 #yaml-cpp库测试
 add_executable(test_yaml tests/test_yaml.cpp)
-force_redefine_file_macro_for_sources(test_yaml)
-target_link_libraries(test_yaml ${YAMLCPP})
+#force_redefine_file_macro_for_sources(test_yaml)
+target_link_libraries(test_yaml ${LIBS})
 
 #配置管理类测试
 add_executable(test_config tests/test_config.cpp)
-force_redefine_file_macro_for_sources(test_config)
+#force_redefine_file_macro_for_sources(test_config)
 add_dependencies(test_config sylar)
-target_link_libraries(test_config sylar ${YAMLCPP})
+target_link_libraries(test_config ${LIBS})
+
+#线程类测试
+add_executable(test_thread tests/test_thread.cpp)
+#force_redefine_file_macro_for_sources(test_thread)
+add_dependencies(test_thread sylar)
+target_link_libraries(test_thread ${LIBS})
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
