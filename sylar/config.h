@@ -2,6 +2,7 @@
 #define MYSYLAR_CONFIG_H
 
 #include "sylar/log.h"
+#include "thread.h"
 #include <boost/lexical_cast.hpp>
 #include <functional>
 #include <list>
@@ -146,6 +147,7 @@ public:
     typedef std::shared_ptr<ConfigVar> ptr;
     typedef std::function<void(const T &old_value, const T &new_value)>
         on_change_cb;
+    typedef RWMutex RWMutexType;
 
     ConfigVar(const std::string &name, const T &default_value,
               const std::string &description = "")
@@ -155,6 +157,7 @@ public:
     std::string toString() override {
         try {
             // return boost::lexical_cast<std::string>(m_val);
+            RWMutexType::ReadLock lock(m_mutex);
             return ToStr()(m_val);
         } catch (std::exception &e) {
             SYLAR_LOG_ERROR(SYLAR_LOG_ROOT())
@@ -179,45 +182,62 @@ public:
     }
 
     std::string getTypeName() const override { return typeid(T).name(); }
-    const T getValue() const { return m_val; }
+    const T getValue() {
+        RWMutexType::ReadLock lock(m_mutex);
+        return m_val;
+    }
 
     //每次更新某个配置时，都判断一下是否需要调用对应的回调函数，以日志配置为例，
     //日志的配置项为logs，在配置管理类中对应一系列的struct LogDefine变量集合，
     //而日志类logger和配置管理类是相互独立的，所以处理办法是，为logs配置项添加
     //一个回调函数，在配置改变时，调用回调函数，在回调函数中修改logger类的内容
     void setValue(const T &v) {
-        if (v == m_val) {
-            return;
+        {
+            RWMutexType::ReadLock lock(m_mutex);
+            if (v == m_val) {
+                return;
+            }
+
+            for (auto &i : m_cbs) {
+                i.second(m_val, v);
+            }
         }
 
-        for (auto &i : m_cbs) {
-            i.second(m_val, v);
-        }
-
+        RWMutexType::WriteLock lock(m_mutex);
         m_val = v;
     }
 
     uint64_t addListener(on_change_cb cb) {
+        RWMutexType::WriteLock lock(m_mutex);
         static uint64_t s_fun_id = 0;
         ++s_fun_id;
         m_cbs[s_fun_id] = cb;
         return s_fun_id;
     }
 
-    void delListener(uint64_t key) { m_cbs.erase(key); }
+    void delListener(uint64_t key) {
+        RWMutexType::WriteLock lock(m_mutex);
+        m_cbs.erase(key);
+    }
 
     on_change_cb getListener(uint64_t key) {
+        RWMutexType::ReadLock lock(m_mutex);
         auto it = m_cbs.find(key);
         return it == m_cbs.end() ? nullptr : it->second;
     }
 
-    void clearListener() { m_cbs.clear(); }
+    void clearListener() {
+        RWMutexType::WriteLock lock(m_mutex);
+        m_cbs.clear();
+    }
 
 private:
     T m_val;
 
     //配置变更回调函数集合，uint64_t key，要求唯一
     std::map<uint64_t, on_change_cb> m_cbs;
+
+    RWMutexType m_mutex;
 };
 
 //配置管理类，实现从YAML文件加载配置及查询某个具体的配置
@@ -225,10 +245,12 @@ class ConfigManager {
 public:
     //配置名称-配置值
     typedef std::map<std::string, ConfigVarBase::ptr> ConfigVarMap;
+    typedef RWMutex RWMutexType;
 
     //根据配置名称查询某个配置的值
     template <class T>
     static typename ConfigVar<T>::ptr LookUp(const std::string &name) {
+        RWMutexType::ReadLock lock(GetMutex());
         auto it = s_configs.find(name);
         if (it == s_configs.end()) {
             return nullptr;
@@ -245,6 +267,8 @@ public:
         if (tmp) {
             return tmp;
         }
+
+        RWMutexType::WriteLock lock(GetMutex());
         //配置不存在，则新增一个配置，使用默认值
         if (name.find_first_not_of("abcdefghikjlmnopqrstuvwxyz._012345678") !=
             std::string::npos) {
@@ -267,6 +291,11 @@ public:
 
 private:
     static ConfigVarMap s_configs;
+
+    static RWMutexType &GetMutex() {
+        static RWMutexType s_mutex;
+        return s_mutex;
+    }
 };
 
 } // namespace sylar

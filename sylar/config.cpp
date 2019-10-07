@@ -5,6 +5,7 @@ namespace sylar {
 ConfigManager::ConfigVarMap ConfigManager::s_configs;
 
 ConfigVarBase::ptr ConfigManager::LookupBase(const std::string &name) {
+    RWMutexType::ReadLock lock(GetMutex());
     auto it = s_configs.find(name);
     return it == s_configs.end() ? nullptr : it->second;
 }
