@@ -197,7 +197,12 @@ public:
         m_val = v;
     }
 
-    void addListener(uint64_t key, on_change_cb cb) { m_cbs[key] = cb; }
+    uint64_t addListener(on_change_cb cb) {
+        static uint64_t s_fun_id = 0;
+        ++s_fun_id;
+        m_cbs[s_fun_id] = cb;
+        return s_fun_id;
+    }
 
     void delListener(uint64_t key) { m_cbs.erase(key); }
 
