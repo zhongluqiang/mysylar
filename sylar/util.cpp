@@ -1,4 +1,5 @@
 #include "util.h"
+#include "fiber.h"
 #include "log.h"
 
 sylar::Logger::ptr g_logger = SYLAR_LOG_NAME("system");
@@ -7,7 +8,7 @@ namespace sylar {
 
 pid_t GetThreadId() { return syscall(SYS_gettid); }
 
-uint32_t GetFiberId() { return 0; }
+uint32_t GetFiberId() { return sylar::Fiber::GetFiberId(); }
 
 void Backtrace(std::vector<std::string> &bt, int size, int skip) {
     void **array = (void **)malloc(sizeof(void *) * size);
