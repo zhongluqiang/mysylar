@@ -6,7 +6,7 @@
 #include <string.h>
 
 #define SYLAR_ASSERT(x)                                                        \
-    if ((!x)) {                                                                \
+    if (!(x)) {                                                                \
         SYLAR_LOG_ERROR(SYLAR_LOG_ROOT())                                      \
             << "ASSERTION: " #x << "\nbacktrace:\n"                            \
             << sylar::BacktraceToString(100, 2, "    ");                       \
