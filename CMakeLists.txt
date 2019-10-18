@@ -24,6 +24,8 @@ set(
     sylar/singleton.h 
     sylar/util.h 
     sylar/util.cpp
+    sylar/fiber.h 
+    sylar/fiber.cpp 
     )
 
 set(
@@ -67,8 +69,14 @@ add_executable(test_util tests/test_util.cpp)
 add_dependencies(test_util sylar)
 target_link_libraries(test_util ${LIBS})
 
-#辅助接口测试
+#ucontext接口测试
 add_executable(test_ucontext tests/test_ucontext.cpp)
+
+#fiber类测试
+add_executable(test_fiber tests/test_fiber.cpp)
+#force_redefine_file_macro_for_sources(test_fiber)
+add_dependencies(test_fiber sylar)
+target_link_libraries(test_fiber ${LIBS})
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
