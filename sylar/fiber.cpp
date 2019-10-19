@@ -131,6 +131,7 @@ void Fiber::resume() {
 
 //从当前协程切回线程的主协程
 void Fiber::yield() {
+    SetThis(t_threadFiber.get());
     //线程运行完之后还会再yield一次，用于回到主协程，此时状态已为结束状态
     if (m_state != FIBER_TERMINATED) {
         m_state = FIBER_PENDING;
