@@ -162,6 +162,14 @@ void Fiber::MainFunc() {
         SYLAR_LOG_ERROR(g_logger) << "Fiber Except"
                                   << " fiber_id=" << cur->getId() << std::endl
                                   << sylar::BacktraceToString(10);
+
+        /* 在C++中，线程取消是通过异常来实现的，如果协程所在的线程被pthread_cancel或
+         * pthread_exit取消，则协程会收到异常，这个异常catch(...)是无法处理的，必须
+         * 重新抛出
+         */
+        SYLAR_LOG_WARN(g_logger)
+            << "Maybe fiber thread is terminated by cancellation!";
+        throw;
     }
 
     auto raw_ptr = cur.get(); //手动让t_fiber的引用计数减1
