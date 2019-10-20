@@ -55,7 +55,13 @@
         "streambuf": "cpp",
         "cfenv": "cpp",
         "cinttypes": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "bitset": "cpp",
+        "chrono": "cpp",
+        "ratio": "cpp",
+        "numeric": "cpp",
+        "thread": "cpp",
+        "typeindex": "cpp"
     },
     "editor.rulers": [
         80

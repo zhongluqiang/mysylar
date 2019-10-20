@@ -82,6 +82,7 @@ Fiber::Fiber(std::function<void()> cb, size_t stacksize)
     m_ctx.uc_stack.ss_size = m_stacksize;
 
     makecontext(&m_ctx, &Fiber::MainFunc, 0);
+    // SYLAR_LOG_INFO(g_logger) << "construct fibler: " << m_id;
 }
 
 Fiber::~Fiber() {
