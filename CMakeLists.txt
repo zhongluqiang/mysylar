@@ -86,5 +86,8 @@ add_executable(test_scheduler tests/test_scheduler.cpp)
 add_dependencies(test_scheduler sylar)
 target_link_libraries(test_scheduler ${LIBS})
 
+#epoll接口测试
+add_executable(test_epoll tests/test_epoll.cpp)
+
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
