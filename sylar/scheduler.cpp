@@ -22,9 +22,8 @@ void Scheduler::stop(bool force) {
         m_thread->join();
         SYLAR_ASSERT(m_tasks.empty());
     } else {
-        // todo:强制结束调度线程
-        // m_thread->cancel();
-        // SYLAR_ASSERT(m_tasks.empty());
+        m_thread->cancel();
+        m_thread->join();
     }
 }
 
