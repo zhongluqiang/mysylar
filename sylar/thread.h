@@ -202,6 +202,7 @@ public:
     const std::string getName() const { return m_name; }
 
     void join();
+    void cancel();
 
     static Thread *GetThis();
     static const std::string &GetName();

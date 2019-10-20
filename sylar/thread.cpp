@@ -71,6 +71,12 @@ void *Thread::run(void *arg) {
     //修改线程名称，不修改的话会继承父进程的名称，不便于ps查看，线程名称限定长度为16字节
     pthread_setname_np(pthread_self(), thread->m_name.substr(0, 15).c_str());
 
+    //设置线程的取消状态和取消类型
+    //允许取消
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, nullptr);
+    //取消后立即退出，可能存在资源未释放问题，用户线程需要做好应对
+    pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, nullptr);
+
     std::function<void()> cb;
     cb.swap(thread->m_cb);
 
@@ -86,6 +92,18 @@ void Thread::join() {
             SYLAR_LOG_ERROR(g_logger)
                 << "pthread_join thread fail, rt=" << rt << "name=" << m_name;
             throw std::logic_error("pthread_join error");
+        }
+        m_thread = 0;
+    }
+}
+
+void Thread::cancel() {
+    if (m_thread) {
+        int rt = pthread_cancel(m_thread);
+        if (rt) {
+            SYLAR_LOG_ERROR(g_logger)
+                << "pthread_cancel thread fail, rt=" << rt << "name=" << m_name;
+            throw std::logic_error("pthread_cancel error");
         }
         m_thread = 0;
     }
