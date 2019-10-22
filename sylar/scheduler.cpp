@@ -1,14 +1,37 @@
 #include "scheduler.h"
 #include "macro.h"
+#include <errno.h>
+#include <fcntl.h> /* Obtain O_* constant definitions */
+#include <sys/epoll.h>
+#include <unistd.h>
 
 namespace sylar {
 
 static sylar::Logger::ptr g_logger = SYLAR_LOG_NAME("system");
 
 Scheduler::Scheduler(const std::string &name)
-    : m_name(name) {}
+    : m_name(name) {
+    m_epfd = epoll_create1(0);
+    SYLAR_ASSERT(m_epfd > 0);
 
-Scheduler::~Scheduler() { SYLAR_ASSERT(m_tasks.empty()); }
+    int rt = pipe(m_tickleFds);
+    SYLAR_ASSERT(rt == 0);
+
+    rt = fcntl(m_tickleFds[0], F_SETFL, O_NONBLOCK);
+    SYLAR_ASSERT(rt == 0);
+
+    epoll_event ev;
+    ev.data.fd = m_tickleFds[0]; //读句柄
+    ev.events  = EPOLLIN | EPOLLET;
+
+    rt = epoll_ctl(m_epfd, EPOLL_CTL_ADD, m_tickleFds[0], &ev);
+    SYLAR_ASSERT(rt == 0);
+}
+
+Scheduler::~Scheduler() {
+    //强制停止时可能仍有协程没执行完，这个断言要去掉
+    // SYLAR_ASSERT(m_tasks.empty());
+}
 
 void Scheduler::start() {
     MutexType::Lock lock(m_mutex);
@@ -17,6 +40,7 @@ void Scheduler::start() {
 }
 
 void Scheduler::stop(bool force) {
+    m_stop = true;
     if (!force) {
         tickle(); //唤醒idle协程
         m_thread->join();
@@ -25,19 +49,47 @@ void Scheduler::stop(bool force) {
         m_thread->cancel();
         m_thread->join();
     }
+    close(m_epfd);
+    close(m_tickleFds[0]);
+    close(m_tickleFds[1]);
 }
 
 void Scheduler::tickle() {
-    // SYLAR_LOG_INFO(g_logger) << "ticlke";
-    m_semIdle.notify();
+    //往pipe写入一个数据，引起idle协程的epoll_wait唤醒，实现通知调度功能
+    int rt = write(m_tickleFds[1], "T", 1);
+    SYLAR_ASSERT(rt == 1);
 }
 
 void Scheduler::idle() {
-    SYLAR_ASSERT(m_tasks.empty());
+    // bug fixed: idle还没来得及运行，上层就添加了任务时，这里会出错
+    // SYLAR_ASSERT(m_tasks.empty());
+
     m_idle = true;
-    /* idle协程阻塞在信号量wait上，唤醒函数是tickle(),时机是添加新任务及停止调度
+    /* idle协程阻塞在管道epoll_wait上，唤醒函数是tickle(),时机是添加新任务及停止调度
      */
-    m_semIdle.wait();
+    epoll_event ev;
+    while (true) {
+        int rt = epoll_wait(m_epfd, &ev, 1, -1);
+        if (rt < 0) {
+            if (errno == EINTR) {
+                continue;
+            } else {
+                SYLAR_LOG_ERROR(g_logger)
+                    << "epoll_wait error:" << strerror(errno);
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    /* 清空pipe，一次将pipe内的所有内容读完，即有可能多次tickle()被一次消耗掉
+     */
+    if (ev.data.fd == m_tickleFds[0]) {
+        uint8_t dummy[256];
+        while (read(m_tickleFds[0], dummy, sizeof(dummy)) > 0)
+            ;
+    }
 }
 
 void Scheduler::run() {
@@ -85,14 +137,20 @@ void Scheduler::run() {
                 cb_fiber->reset(nullptr);
             }
         } else {
-            /* 无任务可调度，运行idle协程 */
+            /* 当前无任务调度，且停止标志被设置，直接结束调度线程 */
+            if (m_stop) {
+                break;
+            }
+
+            /* 未停止，但无任务可调度，运行idle协程 */
             SYLAR_ASSERT(m_tasks.empty());
             Fiber::ptr idle_fiber(new Fiber(std::bind(&Scheduler::idle, this)));
             idle_fiber->resume();
             m_idle = false;
 
-            /* idle协程只有添加了新任务或是调度器停止时才会被唤醒，如果没有调度任务，
-             * 则一定是调用了stop()方法，是时候结束整个协程调度了*/
+            /* idle协程退出，表示要么添加了新任务，要么停止了调度，这里判断下，如果任
+             *务还没调度完，要先将所有任务调度完再退出
+             */
             if (!m_tasks.empty()) {
                 continue;
             } else {

@@ -60,9 +60,10 @@ int main() {
     /* 停止调度，默认参数为false，调度器会等所有调度任务执行结束之后再返回，
      * 当参数传true时，表示强制停止，调度器会强行结束当前所有任务并立即返回
      */
-    // sc.stop();
-    sleep(1);
-    sc.stop(true);
+    sc.stop();
+    /* 强制停止调度可能导致协程分配的资源未释放问题，强制不建议使用 */
+    // sleep(1);
+    // sc.stop(true);
 
     SYLAR_LOG_INFO(g_logger) << "main end";
     return 0;

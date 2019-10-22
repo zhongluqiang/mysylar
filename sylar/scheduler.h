@@ -77,7 +77,13 @@ private:
     std::list<ScheduleTask> m_tasks; //任务队列
     Thread::ptr m_thread;            //调度线程
     bool m_idle = false;             //调度线程是否idle
-    Semaphore m_semIdle; // idle信号量，用于通知协程调度器退出idle状态
+
+    /* 使用pipe配合epoll实现协程调度 */
+    int m_epfd;         // epoll句柄
+    int m_tickleFds[2]; // pipe句柄， [0]读句柄，[1]写句柄
+
+    /* 增加一个停止标志，解决stop()的tickle有可能被忽略的问题 */
+    bool m_stop = false;
 };
 
 } // end namespace sylar
