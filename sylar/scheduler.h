@@ -39,6 +39,28 @@ public:
         }
     }
 
+    /* 批量添加调度任务 */
+    template <class InputIterator>
+    void schedule(InputIterator begin, InputIterator end) {
+        bool need_tickle = false;
+        {
+            MutexType::Lock lock(m_mutex);
+            while (begin != end) {
+                ScheduleTask task(*begin);
+                if (task.fiber || task.cb) {
+                    if (m_idle && !need_tickle) {
+                        need_tickle = true;
+                    }
+                    m_tasks.push_back(task);
+                }
+                ++begin;
+            }
+            if (need_tickle) {
+                tickle();
+            }
+        }
+    }
+
     /* 启动协程调度器 */
     void start();
     /* 停止协程调度器，默认等所有协程执行完之后再返回 */

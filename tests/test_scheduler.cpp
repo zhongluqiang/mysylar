@@ -50,6 +50,10 @@ int main() {
      *主动让出执行权的协程会被重新追加到任务队列的尾部，最终也会被执行*/
     sc.start();
 
+    /*批量添加调度任务*/
+    std::vector<std::function<void()>> fibers{test_fiber3, test_fiber3};
+    sc.schedule(fibers.begin(), fibers.end());
+
     /* 睡眠10秒，等所有任务都执行完，当所有任务都执行完后，调度器执行idle任务，该任务
      * 默认将调度线程挂起，直到有新任务被添加进来*/
     sleep(5);
