@@ -66,9 +66,10 @@ Fiber::ptr Fiber::GetThis() {
 }
 
 //带参数的构造函数用于创建其他协程，需要分配栈
-Fiber::Fiber(std::function<void()> cb, size_t stacksize)
+Fiber::Fiber(std::function<void(void *)> cb, void *arg, size_t stacksize)
     : m_id(++s_fiber_id)
-    , m_cb(cb) {
+    , m_cb(cb)
+    , m_arg(arg) {
     ++s_fiber_count;
     m_stacksize = stacksize ? stacksize : g_fiber_stacksize->getValue();
     m_stack     = StackAllocator::Alloc(m_stacksize);
@@ -81,7 +82,7 @@ Fiber::Fiber(std::function<void()> cb, size_t stacksize)
     m_ctx.uc_stack.ss_sp   = m_stack;
     m_ctx.uc_stack.ss_size = m_stacksize;
 
-    makecontext(&m_ctx, &Fiber::MainFunc, 0);
+    makecontext(&m_ctx, (void (*)()) & Fiber::MainFunc, 1, m_arg);
     // SYLAR_LOG_INFO(g_logger) << "construct fibler: " << m_id;
 }
 
@@ -104,10 +105,11 @@ Fiber::~Fiber() {
 }
 
 //重置协程函数和状态，复用栈空间，不重新创建栈
-void Fiber::reset(std::function<void()> cb) {
+void Fiber::reset(std::function<void(void *)> cb, void *arg) {
     SYLAR_ASSERT(m_stack);
     SYLAR_ASSERT(m_state == FIBER_INIT || m_state == FIBER_TERMINATED);
-    m_cb = cb;
+    m_cb  = cb;
+    m_arg = arg;
     if (getcontext(&m_ctx)) {
         SYLAR_ASSERT2(false, "getcontext");
     }
@@ -116,7 +118,7 @@ void Fiber::reset(std::function<void()> cb) {
     m_ctx.uc_stack.ss_sp   = m_stack;
     m_ctx.uc_stack.ss_size = m_stacksize;
 
-    makecontext(&m_ctx, &Fiber::MainFunc, 0);
+    makecontext(&m_ctx, (void (*)()) & Fiber::MainFunc, 1, m_arg);
     m_state = FIBER_INIT;
 }
 
@@ -143,13 +145,13 @@ void Fiber::yield() {
     }
 }
 
-void Fiber::MainFunc() {
+void Fiber::MainFunc(void *arg) {
     Fiber::ptr cur =
         GetThis(); // GetThis()的shared_from_this()方法让引用计数加1
     SYLAR_ASSERT(cur);
 
     try {
-        cur->m_cb();
+        cur->m_cb(arg);
         cur->m_cb    = nullptr;
         cur->m_state = FIBER_TERMINATED;
     } catch (const std::exception &e) {

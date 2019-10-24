@@ -25,11 +25,12 @@ private:
 
 public:
     //公共构造函数用于创建用户协程，需要分配栈
-    Fiber(std::function<void()> cb, size_t stacksize = 0);
+    Fiber(std::function<void(void *)> cb, void *arg = nullptr,
+          size_t stacksize = 0);
     ~Fiber();
 
     //重置协程状态和入口函数，复用栈空间，不重新创建栈
-    void reset(std::function<void()> cb);
+    void reset(std::function<void(void *)> cb, void *arg = nullptr);
 
     //把目标协程和当前正在执行的协程进行交换，使其进入运行状态
     void resume();
@@ -54,7 +55,7 @@ public:
     static uint64_t TotalFibers();
 
     //用于执行协程的函数
-    static void MainFunc();
+    static void MainFunc(void *arg);
 
     //当前运行的协程的的协程号
     static uint64_t GetFiberId();
@@ -67,7 +68,8 @@ private:
     ucontext_t m_ctx;        //协程上下文
     void *m_stack = nullptr; //协程栈
 
-    std::function<void()> m_cb; //协程入口
+    std::function<void(void *)> m_cb; //协程入口
+    void *m_arg;                      //协程参数
 };
 
 } // namespace sylar

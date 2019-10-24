@@ -5,13 +5,13 @@
 
 sylar::Logger::ptr g_logger = SYLAR_LOG_ROOT();
 
-void run_in_fiber2() {
-    SYLAR_LOG_INFO(g_logger) << "run_in_fiber2 begin";
+void run_in_fiber2(void *arg) {
+    SYLAR_LOG_INFO(g_logger) << "run_in_fiber2 begin, arg=" << arg;
     SYLAR_LOG_INFO(g_logger) << "run_in_fiber2 end";
 }
 
-void run_in_fiber() {
-    SYLAR_LOG_INFO(g_logger) << "run_in_fiber begin";
+void run_in_fiber(void *arg) {
+    SYLAR_LOG_INFO(g_logger) << "run_in_fiber begin, arg=" << arg;
 
     SYLAR_LOG_INFO(g_logger) << "before run_in_fiber yield";
     sylar::Fiber::GetThis()->yield();
@@ -25,7 +25,7 @@ void test_fiber() {
     SYLAR_LOG_INFO(g_logger) << "test_fiber begin";
 
     sylar::Fiber::GetThis();
-    sylar::Fiber::ptr fiber(new sylar::Fiber(run_in_fiber));
+    sylar::Fiber::ptr fiber(new sylar::Fiber(run_in_fiber, (void *)0x12345));
     SYLAR_LOG_INFO(g_logger) << "use_coun:" << fiber.use_count(); // 1
     SYLAR_LOG_INFO(g_logger) << "before test_fiber resume";
     fiber->resume();
@@ -46,8 +46,8 @@ void test_fiber() {
     SYLAR_LOG_INFO(g_logger)
         << "fiber status: " << fiber->getState(); // FIBER_TERMINATED
 
-    fiber->reset(
-        run_in_fiber2); //上一个协程结束之后，复用其栈空间再创建一个新协程
+    /* 上一个协程结束之后，复用其栈空间再创建一个新协程 */
+    fiber->reset(run_in_fiber2, (void *)0x67890);
     fiber->resume();
 
     SYLAR_LOG_INFO(g_logger) << "use_coun:" << fiber.use_count(); // 1
