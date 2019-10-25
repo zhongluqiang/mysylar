@@ -124,9 +124,9 @@ void Scheduler::run() {
         } else if (task.cb) {
             if (cb_fiber) {
                 /* 直接复用原来的fiber */
-                cb_fiber->reset(task.cb);
+                cb_fiber->reset(task.cb, task.arg);
             } else {
-                cb_fiber.reset(new Fiber(task.cb));
+                cb_fiber.reset(new Fiber(task.cb, task.arg));
             }
             cb_fiber->resume();
             if (cb_fiber->getState() != Fiber::FIBER_TERMINATED) {

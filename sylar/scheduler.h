@@ -20,10 +20,11 @@ public:
     virtual ~Scheduler();
 
     /* 添加调度任务 */
-    template <class FiberOrCb> void schedule(FiberOrCb fc) {
+    template <class FiberOrCb>
+    void schedule(FiberOrCb fc, void *arg = nullptr) {
         bool need_tickle = false;
         MutexType::Lock lock(m_mutex);
-        ScheduleTask task(fc);
+        ScheduleTask task(fc, arg);
 
         if (task.fiber || task.cb) {
 
@@ -39,7 +40,7 @@ public:
         }
     }
 
-    /* 批量添加调度任务 */
+    /* 批量添加调度任务，当添加的任务为函数指针时，函数参数默认为nullptr */
     template <class InputIterator>
     void schedule(InputIterator begin, InputIterator end) {
         bool need_tickle = false;
@@ -77,14 +78,20 @@ protected:
     void idle();
 
 private:
-    /*调度任务，可以是函数，也可以是Fiber类对象*/
+    /*调度任务，可以是函数，也可以是Fiber类对象，如果是函数，则需要传递参数，Fiber类
+     *对象则不需要
+     */
     struct ScheduleTask {
         Fiber::ptr fiber;
-        std::function<void()> cb;
+        std::function<void(void *)> cb;
+        void *arg;
 
-        ScheduleTask(Fiber::ptr f) { fiber = f; }
-        ScheduleTask(Fiber::ptr *f) { fiber.swap(*f); }
-        ScheduleTask(std::function<void()> f) { cb = f; }
+        ScheduleTask(Fiber::ptr f, void *_arg = nullptr) { fiber = f; }
+        ScheduleTask(Fiber::ptr *f, void *_arg = nullptr) { fiber.swap(*f); }
+        ScheduleTask(std::function<void(void *)> f, void *_arg = nullptr) {
+            cb  = f;
+            arg = _arg;
+        }
         ScheduleTask() {}
 
         void reset() {
