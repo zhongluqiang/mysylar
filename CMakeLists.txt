@@ -89,5 +89,11 @@ target_link_libraries(test_scheduler ${LIBS})
 #epoll接口测试
 add_executable(test_epoll tests/test_epoll.cpp)
 
+#IO协程调度测试
+add_executable(test_io_schedule tests/test_io_schedule.cpp)
+#force_redefine_file_macro_for_sources(test_io_schedule)
+add_dependencies(test_io_schedule sylar)
+target_link_libraries(test_io_schedule ${LIBS})
+
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)

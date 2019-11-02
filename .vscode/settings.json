@@ -61,7 +61,8 @@
         "ratio": "cpp",
         "numeric": "cpp",
         "thread": "cpp",
-        "typeindex": "cpp"
+        "typeindex": "cpp",
+        "random": "cpp"
     },
     "editor.rulers": [
         80

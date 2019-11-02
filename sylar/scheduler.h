@@ -8,8 +8,31 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <sys/epoll.h>
 
 namespace sylar {
+
+class Scheduler;
+
+/* 文件描述符上下文，在IO协程执行时作为参数传入，用于在协程执行时获取当前协程所属的文件
+ * 描述符，调度器指针，以及发生的事件
+ */
+struct FdContext {
+public:
+    int fd;
+    std::function<void(void *)> cb;
+    Scheduler *scheduler;
+    epoll_event event; // events用于保存已发生的事件，data.u32用于存放原始事件
+public:
+    FdContext() { reset(); }
+    void reset() {
+        fd             = -1;
+        cb             = nullptr;
+        scheduler      = nullptr;
+        event.events   = 0;
+        event.data.u32 = 0;
+    }
+}; // end struct FdContext
 
 class Scheduler {
 public:
@@ -23,7 +46,6 @@ public:
     template <class FiberOrCb>
     void schedule(FiberOrCb fc, void *arg = nullptr) {
         bool need_tickle = false;
-        MutexType::Lock lock(m_mutex);
         ScheduleTask task(fc, arg);
 
         if (task.fiber || task.cb) {
@@ -32,6 +54,7 @@ public:
             if (m_idle) {
                 need_tickle = true;
             }
+            MutexType::Lock lock(m_mutex);
             m_tasks.push_back(task);
         }
 
@@ -62,8 +85,18 @@ public:
         }
     }
 
+    /* 添加IO调度任务
+     * fd: 目标文件描述符
+     * op: EPOLL_CTL_ADD/EPOLL_CTL_MOD/EPOLL_CTL_DEL，添加/修改/删除事件
+     * events: IO事件，参考epoll的事件枚举
+     * cb: 回调函数
+     * */
+    int io_schedule(int fd, int op, uint32_t events,
+                    std::function<void(void *)> cb);
+
     /* 启动协程调度器 */
     void start();
+
     /* 停止协程调度器，默认等所有协程执行完之后再返回 */
     void stop(bool force = false);
 
@@ -100,6 +133,8 @@ private:
         }
     };
 
+    void resizeFdContext(size_t size);
+
 private:
     std::string m_name;              //协程调度器名称
     MutexType m_mutex;               //互斥锁
@@ -113,7 +148,10 @@ private:
 
     /* 增加一个停止标志，解决stop()的tickle有可能被忽略的问题 */
     bool m_stop = false;
-};
+
+    /* 文件描述符上下文集合，用于IO事件调度*/
+    std::vector<FdContext *> m_fdContexts;
+}; // end class Scheduler
 
 } // end namespace sylar
 
