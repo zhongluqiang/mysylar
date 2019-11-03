@@ -290,4 +290,19 @@ int Scheduler::io_schedule(int fd, int op, uint32_t events, ScheduleTask task) {
     return 0;
 } // end Scheduler::io_schedule
 
+int Scheduler::timer_schedule(Timer::ptr timer, int op) {
+    if (!timer) {
+        SYLAR_LOG_ERROR(g_logger) << "invalid argument:" << timer;
+        return -1;
+    }
+
+    Timer::TimerContext *pContext = new Timer::TimerContext;
+    SYLAR_ASSERT(pContext != nullptr);
+    pContext->fd   = timer->getcontext().fd;
+    pContext->task = timer->getcontext().task;
+    Fiber::ptr fiber(new Fiber(&Timer::timer_proc, pContext));
+
+    return io_schedule(pContext->fd, op, EPOLLIN | EPOLLET, fiber);
+} // end Scheduler::timer_schedule
+
 } // end namespace sylar

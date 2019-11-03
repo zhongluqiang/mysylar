@@ -4,6 +4,7 @@
 #include "fiber.h"
 #include "log.h"
 #include "thread.h"
+#include "timer.h"
 #include <functional>
 #include <list>
 #include <memory>
@@ -13,34 +14,6 @@
 namespace sylar {
 
 class Scheduler;
-
-/*调度任务，可以是函数，也可以是Fiber类对象，如果是函数，则需要传递参数，Fiber类
- *对象则不需要
- */
-struct ScheduleTask {
-    Fiber::ptr fiber;
-    std::function<void(void *)> cb;
-    void *arg;
-
-    ScheduleTask(Fiber::ptr f, void *_arg = nullptr) { fiber = f; }
-    ScheduleTask(std::function<void(void *)> f, void *_arg = nullptr) {
-        cb  = f;
-        arg = _arg;
-    }
-    /*SchdeuleTask有个二义性问题，即构造函数传参数nullptr进来时可以同时匹配到以上两
-     *个构造函数，为避免编译提示二义性错误，增加一个普通指针的构造函数，只为了消除编译
-     *错误，一般不用
-     */
-    ScheduleTask(void *ptr = nullptr, void *_arg = nullptr) {
-        fiber = nullptr;
-        cb    = nullptr;
-    }
-
-    void reset() {
-        fiber = nullptr;
-        cb    = nullptr;
-    }
-};
 
 /* 文件描述符上下文，在IO协程执行时作为参数传入，用于在协程执行时获取当前协程所属的文件
  * 描述符，调度器指针，以及发生的事件
@@ -136,6 +109,9 @@ public:
     //     ScheduleTask task(fiber);
     //     return io_schedule(fd, op, events, task);
     // }
+
+    //添加定时器调度任务
+    int timer_schedule(Timer::ptr timer, int op);
 
     /* 启动协程调度器 */
     void start();

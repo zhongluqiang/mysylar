@@ -28,6 +28,8 @@ set(
     sylar/fiber.cpp 
     sylar/scheduler.h 
     sylar/scheduler.cpp
+    sylar/timer.h 
+    sylar/timer.cpp 
     )
 
 set(

@@ -145,11 +145,17 @@ void test_io_schedule(void *arg) {
     //增加一个timerfd，用于测试协程对象的调度
     timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
     SYLAR_ASSERT(timerfd > 0);
+    SYLAR_LOG_INFO(g_logger) << "timerfd=" << timerfd;
     struct itimerspec ts = {0};
     ts.it_value.tv_sec   = 3; //三秒后超时
     timerfd_settime(timerfd, 0, &ts, nullptr);
     sylar::Fiber::ptr fiber(new sylar::Fiber(test_io_fiber_schedule, psc));
     psc->io_schedule(timerfd, EPOLL_CTL_ADD, EPOLLIN | EPOLLET, fiber);
+
+    //增加定时器调度，定时器超时之后会自动从调度器中删除，不需要手动删除
+    sylar::Timer::ptr timer(new sylar::Timer(
+        5000, [](void *) { SYLAR_LOG_INFO(g_logger) << "timer expires."; }));
+    psc->timer_schedule(timer, EPOLL_CTL_ADD);
 
     SYLAR_LOG_INFO(g_logger) << "test_io_schedule end";
 }
