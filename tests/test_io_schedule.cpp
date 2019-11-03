@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
+#include <sys/timerfd.h>
 #include <unistd.h>
 
 //使用协程调度器的IO协程调度功能实现并发TCP ECHO服务器
@@ -116,6 +117,16 @@ void do_accept(void *arg) {
     SYLAR_LOG_INFO(g_logger) << "do_accept end";
 }
 
+int timerfd;
+void test_io_fiber_schedule(void *arg) {
+    SYLAR_LOG_INFO(g_logger) << "test_io_fiber_schedule begin";
+    SYLAR_ASSERT(arg != nullptr);
+    sylar::Scheduler *psc = (sylar::Scheduler *)arg;
+    psc->io_schedule(timerfd, EPOLL_CTL_DEL, 0, nullptr);
+    close(timerfd);
+    SYLAR_LOG_INFO(g_logger) << "test_io_fiber_schedule end";
+}
+
 void test_io_schedule(void *arg) {
     SYLAR_LOG_INFO(g_logger) << "test_io_schedule begin";
     SYLAR_ASSERT(arg != nullptr);
@@ -130,6 +141,15 @@ void test_io_schedule(void *arg) {
 
     //为服务器监听套接字fd添加IO协程调度任务
     psc->io_schedule(serverfd, EPOLL_CTL_ADD, EPOLLIN | EPOLLET, &do_accept);
+
+    //增加一个timerfd，用于测试协程对象的调度
+    timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+    SYLAR_ASSERT(timerfd > 0);
+    struct itimerspec ts = {0};
+    ts.it_value.tv_sec   = 3; //三秒后超时
+    timerfd_settime(timerfd, 0, &ts, nullptr);
+    sylar::Fiber::ptr fiber(new sylar::Fiber(test_io_fiber_schedule, psc));
+    psc->io_schedule(timerfd, EPOLL_CTL_ADD, EPOLLIN | EPOLLET, fiber);
 
     SYLAR_LOG_INFO(g_logger) << "test_io_schedule end";
 }

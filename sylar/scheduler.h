@@ -14,12 +14,41 @@ namespace sylar {
 
 class Scheduler;
 
+/*调度任务，可以是函数，也可以是Fiber类对象，如果是函数，则需要传递参数，Fiber类
+ *对象则不需要
+ */
+struct ScheduleTask {
+    Fiber::ptr fiber;
+    std::function<void(void *)> cb;
+    void *arg;
+
+    ScheduleTask(Fiber::ptr f, void *_arg = nullptr) { fiber = f; }
+    ScheduleTask(std::function<void(void *)> f, void *_arg = nullptr) {
+        cb  = f;
+        arg = _arg;
+    }
+    /*SchdeuleTask有个二义性问题，即构造函数传参数nullptr进来时可以同时匹配到以上两
+     *个构造函数，为避免编译提示二义性错误，增加一个普通指针的构造函数，只为了消除编译
+     *错误，一般不用
+     */
+    ScheduleTask(void *ptr = nullptr, void *_arg = nullptr) {
+        fiber = nullptr;
+        cb    = nullptr;
+    }
+
+    void reset() {
+        fiber = nullptr;
+        cb    = nullptr;
+    }
+};
+
 /* 文件描述符上下文，在IO协程执行时作为参数传入，用于在协程执行时获取当前协程所属的文件
  * 描述符，调度器指针，以及发生的事件
  */
 struct FdContext {
 public:
     int fd;
+    ScheduleTask task;
     std::function<void(void *)> cb;
     Scheduler *scheduler;
     epoll_event event; // events用于保存已发生的事件，data.u32用于存放原始事件
@@ -89,10 +118,24 @@ public:
      * fd: 目标文件描述符
      * op: EPOLL_CTL_ADD/EPOLL_CTL_MOD/EPOLL_CTL_DEL，添加/修改/删除事件
      * events: IO事件，参考epoll的事件枚举
-     * cb: 回调函数
+     * task: 协程或回调函数
      * */
-    int io_schedule(int fd, int op, uint32_t events,
-                    std::function<void(void *)> cb);
+    template <class FiberOrCb>
+    int io_schedule(int fd, int op, uint32_t events, FiberOrCb fc) {
+        ScheduleTask task(fc);
+        return io_schedule(fd, op, events, task);
+    }
+
+    int io_schedule(int fd, int op, uint32_t events, ScheduleTask task);
+    // int io_schedule(int fd, int op, uint32_t events,
+    //                 std::function<void(void *)> cb) {
+    //     ScheduleTask task(cb);
+    //     return io_schedule(fd, op, events, task);
+    // }
+    // int io_schedule(int fd, int op, uint32_t events, Fiber::ptr fiber) {
+    //     ScheduleTask task(fiber);
+    //     return io_schedule(fd, op, events, task);
+    // }
 
     /* 启动协程调度器 */
     void start();
@@ -111,28 +154,6 @@ protected:
     void idle();
 
 private:
-    /*调度任务，可以是函数，也可以是Fiber类对象，如果是函数，则需要传递参数，Fiber类
-     *对象则不需要
-     */
-    struct ScheduleTask {
-        Fiber::ptr fiber;
-        std::function<void(void *)> cb;
-        void *arg;
-
-        ScheduleTask(Fiber::ptr f, void *_arg = nullptr) { fiber = f; }
-        ScheduleTask(Fiber::ptr *f, void *_arg = nullptr) { fiber.swap(*f); }
-        ScheduleTask(std::function<void(void *)> f, void *_arg = nullptr) {
-            cb  = f;
-            arg = _arg;
-        }
-        ScheduleTask() {}
-
-        void reset() {
-            fiber = nullptr;
-            cb    = nullptr;
-        }
-    };
-
     void resizeFdContext(size_t size);
 
 private:

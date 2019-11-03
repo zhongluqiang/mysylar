@@ -108,8 +108,15 @@ void Scheduler::idle() {
             fd_ctx->event.events = events[i].events;
             SYLAR_LOG_DEBUG(g_logger)
                 << "IO fibler fd=" << fd_ctx->fd << " has event";
-            schedule(fd_ctx->cb,
-                     (void *)fd_ctx); //这里多tickle了一下，可以优化掉
+
+            if (fd_ctx->task.cb) {
+                schedule(fd_ctx->task.cb,
+                         (void *)fd_ctx); //这里多tickle了一下，可以优化掉
+            } else if (fd_ctx->task.fiber) {
+                schedule(fd_ctx->task.fiber);
+            } else {
+                SYLAR_LOG_ERROR(g_logger) << "invalid task";
+            }
         }
         // TODO:待优化，这里不需要break，因为idle也是一个协程，直接在这里yield就可以了，能
         //节省掉创新新idle协程的开销
@@ -198,11 +205,9 @@ void Scheduler::resizeFdContext(size_t size) {
     }
 }
 
-int Scheduler::io_schedule(int fd, int op, uint32_t events,
-                           std::function<void(void *)> _cb) {
-    if (fd < 0 ||
-        (op != EPOLL_CTL_ADD && op != EPOLL_CTL_MOD && op != EPOLL_CTL_DEL)) {
-        SYLAR_LOG_ERROR(g_logger) << "io_schedule: Invalid argument";
+int Scheduler::io_schedule(int fd, int op, uint32_t events, ScheduleTask task) {
+    if (fd < 0) {
+        SYLAR_LOG_ERROR(g_logger) << "Invalid fd:" << fd;
         return -1;
     }
 
@@ -210,118 +215,78 @@ int Scheduler::io_schedule(int fd, int op, uint32_t events,
     MutexType::Lock lock(m_mutex);
     FdContext *fd_ctx = nullptr;
 
-    if (op == EPOLL_CTL_ADD) {
-        //添加IO调度事件
-        if ((int)m_fdContexts.size() > fd) {
-            fd_ctx = m_fdContexts[fd];
-        } else {
-            resizeFdContext(fd * 1.5);
-            fd_ctx = m_fdContexts[fd];
-        }
+    if ((int)m_fdContexts.size() > fd) {
+        fd_ctx = m_fdContexts[fd];
+    } else {
+        resizeFdContext(fd * 1.5);
+        fd_ctx = m_fdContexts[fd];
+    }
 
+    // op及fd_ctx合法性检测
+    if (op == EPOLL_CTL_ADD) {
         if (fd_ctx->fd >= 0) {
             //重复添加，返回错误
             SYLAR_LOG_ERROR(g_logger)
                 << "error,fd " << fd << " has been added!";
             return -1;
         }
-
-        //设置fd为非阻塞模式
-        int flags = fcntl(fd, F_GETFL, 0);
-        if (flags < 0) {
-            SYLAR_LOG_ERROR(g_logger) << "fcntl(" << fd << ", F_GETFL)"
-                                      << "failed" << strerror(errno);
-            return -1;
-        }
-        flags |= O_NONBLOCK;
-        rt = fcntl(fd, F_SETFL, flags);
-        if (rt < 0) {
-            SYLAR_LOG_ERROR(g_logger) << "fcntl(" << fd << ", F_SETFL)"
-                                      << "failed" << strerror(errno);
-            return -1;
-        }
-
-        fd_ctx->fd             = fd;
-        fd_ctx->cb             = _cb;
-        fd_ctx->scheduler      = this;
-        fd_ctx->event.events   = 0;      //这里保存已触发的事件集合
-        fd_ctx->event.data.u32 = events; //这里用来保存原始的事件集合
-
-        epoll_event ev;
-        ev.events   = events;
-        ev.data.ptr = fd_ctx;
-
-        SYLAR_LOG_DEBUG(g_logger) << "add fd:" << fd << " to epoll";
-        rt = epoll_ctl(m_epfd, EPOLL_CTL_ADD, fd, &ev);
-        if (rt) {
-            SYLAR_LOG_ERROR(g_logger)
-                << "epoll_ctl(" << m_epfd << ", " << op << "," << fd << ","
-                << ev.events << "):" << rt << " (" << errno << ") ("
-                << strerror(errno) << ")";
-            return -1;
-        }
     } else if (op == EPOLL_CTL_MOD) {
-        //修改IO调度事件 //todo，简化流程
-        if (fd > (int)m_fdContexts.size() + 1) {
-            SYLAR_LOG_ERROR(g_logger) << "fd(" << fd << ")"
-                                      << " out of range.";
-            return -1;
-        }
-
-        fd_ctx = m_fdContexts[fd];
-        if (fd_ctx->fd != fd) {
-            SYLAR_LOG_ERROR(g_logger) << "fd(" << fd << ")"
-                                      << "has not been added.";
-            return -1;
-        }
-
-        fd_ctx->fd             = fd;
-        fd_ctx->cb             = _cb;
-        fd_ctx->scheduler      = this;
-        fd_ctx->event.events   = 0;      //这里保存已触发的事件集合
-        fd_ctx->event.data.u32 = events; //这里用来保存原始的事件集合
-
-        epoll_event ev;
-        ev.events   = events;
-        ev.data.ptr = fd_ctx;
-        rt          = epoll_ctl(m_epfd, EPOLL_CTL_MOD, fd, &ev);
-        if (rt) {
+        if (fd_ctx->fd < 0) {
+            //待修改的fd未添加，返回错误
             SYLAR_LOG_ERROR(g_logger)
-                << "epoll_ctl(" << m_epfd << ", " << op << "," << fd << ","
-                << ev.events << "):" << rt << " (" << errno << ") ("
-                << strerror(errno) << ")";
+                << "error,fd " << fd << " has not been added!";
             return -1;
         }
     } else if (op == EPOLL_CTL_DEL) {
-        //删除IO调度事件
-        if (fd > (int)m_fdContexts.size() + 1) {
-            SYLAR_LOG_ERROR(g_logger) << "fd(" << fd << ")"
-                                      << " out of range.";
-            return -1;
-        }
-
-        fd_ctx = m_fdContexts[fd];
         if (fd_ctx->fd != fd) {
-            SYLAR_LOG_ERROR(g_logger) << "fd(" << fd << ")"
-                                      << "has not been added.";
-            return -1;
-        }
-
-        rt = epoll_ctl(m_epfd, EPOLL_CTL_DEL, fd, nullptr);
-        if (rt) {
+            //待删除的fd未添加，返回错误
             SYLAR_LOG_ERROR(g_logger)
-                << "epoll_ctl(" << m_epfd << ", " << op << "," << fd
-                << ", nullptr):" << rt << " (" << errno << ") ("
-                << strerror(errno) << ")";
+                << "error,fd " << fd << " has not been added!";
             return -1;
         }
-        fd_ctx->reset();
     } else {
-        SYLAR_LOG_ERROR(g_logger) << "invalid op:" << op;
+        SYLAR_LOG_ERROR(g_logger) << "invalid op: " << op;
         return -1;
     }
 
-    SYLAR_LOG_DEBUG(g_logger) << "io_schedule end";
+    //设置fd为非阻塞模式
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0) {
+        SYLAR_LOG_ERROR(g_logger) << "fcntl(" << fd << ", F_GETFL)"
+                                  << "failed:" << strerror(errno);
+        return -1;
+    }
+    flags |= O_NONBLOCK;
+    rt = fcntl(fd, F_SETFL, flags);
+    if (rt < 0) {
+        SYLAR_LOG_ERROR(g_logger) << "fcntl(" << fd << ", F_SETFL)"
+                                  << "failed:" << strerror(errno);
+        return -1;
+    }
+
+    fd_ctx->fd             = fd;
+    fd_ctx->task           = task;
+    fd_ctx->scheduler      = this;
+    fd_ctx->event.events   = 0;      //这里保存已触发的事件集合
+    fd_ctx->event.data.u32 = events; //这里用来保存原始的事件集合
+
+    epoll_event ev;
+    ev.events   = events;
+    ev.data.ptr = fd_ctx;
+
+    rt = epoll_ctl(m_epfd, op, fd, &ev);
+    if (rt) {
+        SYLAR_LOG_ERROR(g_logger)
+            << "epoll_ctl(" << m_epfd << ", " << op << "," << fd << ","
+            << ev.events << "):" << rt << " (" << errno << ") ("
+            << strerror(errno) << ")";
+        return -1;
+    }
+
+    if (op == EPOLL_CTL_DEL) {
+        fd_ctx->reset();
+    }
+
     return 0;
 } // end Scheduler::io_schedule
 
