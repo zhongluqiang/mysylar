@@ -95,5 +95,8 @@ add_executable(test_io_schedule tests/test_io_schedule.cpp)
 add_dependencies(test_io_schedule sylar)
 target_link_libraries(test_io_schedule ${LIBS})
 
+#timerfd接口测试
+add_executable(test_timerfd tests/test_timerfd.cpp)
+
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
