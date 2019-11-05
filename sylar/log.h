@@ -220,6 +220,9 @@ public:
     typedef Spinlock MutexType;
     LoggerManager() {
         m_root.reset(new Logger); // Logger类构造函数带默认参数"root"
+        // root logger默认打印所有等级的日志，具体的日志等级控制交给root
+        // logger所在的logger来控制，否则SYLAR_LOG_DEBUG宏无法生效
+        m_root->setLevel(LogLevel::UNKNOWN);
         m_root->addAppender(LogAppender::ptr(new StdoutLogAppender));
 
         m_loggers[m_root->m_name] = m_root;
