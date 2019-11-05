@@ -42,11 +42,6 @@ class Timer {
 public:
     typedef std::shared_ptr<Timer> ptr;
 
-    struct TimerContext {
-        int fd;
-        ScheduleTask task;
-    };
-
 public:
     /* 初始化定时器
      * timeout: 超时时间，单位ms
@@ -59,12 +54,10 @@ public:
         }
     }
 
-    ~Timer() {}
+    ~Timer() { close(m_fd); }
 
-    TimerContext getcontext() { return m_context; }
-
-public:
-    static void timer_proc(void *arg);
+    int getFd() { return m_fd; }
+    ScheduleTask getTask() { return m_task; }
 
 private:
     void initTimer(long timeout, ScheduleTask task);
@@ -75,7 +68,8 @@ private:
     Timer operator=(const Timer &) = delete;
 
 private:
-    TimerContext m_context;
+    int m_fd;
+    ScheduleTask m_task;
 };
 
 } // end namespace sylar

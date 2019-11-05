@@ -9,8 +9,12 @@ namespace sylar {
 
 static sylar::Logger::ptr g_logger = SYLAR_LOG_NAME("system");
 
+//当前线程的协程调度器
+static thread_local Scheduler *t_scheduler = nullptr;
+
 Scheduler::Scheduler(const std::string &name)
     : m_name(name) {
+    // g_logger->setLevel(LogLevel::UNKNOWN); //调试时打开
     m_epfd = epoll_create1(0);
     SYLAR_ASSERT(m_epfd > 0);
 
@@ -28,6 +32,7 @@ Scheduler::Scheduler(const std::string &name)
     SYLAR_ASSERT(rt == 0);
 
     resizeFdContext(32);
+    m_iofds = 1;
 }
 
 Scheduler::~Scheduler() {
@@ -60,6 +65,9 @@ void Scheduler::stop(bool force) {
     close(m_tickleFds[0]);
     close(m_tickleFds[1]);
 }
+
+Scheduler *Scheduler::getThis() { return t_scheduler; }
+void Scheduler::setThis(Scheduler *psc) { t_scheduler = psc; }
 
 void Scheduler::tickle() {
     //往pipe写入一个数据，引起idle协程的epoll_wait唤醒，实现通知调度功能
@@ -114,6 +122,11 @@ void Scheduler::idle() {
                          (void *)fd_ctx); //这里多tickle了一下，可以优化掉
             } else if (fd_ctx->task.fiber) {
                 schedule(fd_ctx->task.fiber);
+
+                // //fdContext里也会保存一份fiber的智能指针，
+                // 如果这里不reset，就需要手动对每个fd都执行一次EPOLL_CTL_DEL，保证不会因
+                // 为在这里有一个引用计数而使fiber在调度完结束了也不会被释放
+                // fd_ctx->task.fiber.reset();
             } else {
                 SYLAR_LOG_ERROR(g_logger) << "invalid task";
             }
@@ -127,6 +140,7 @@ void Scheduler::idle() {
 
 void Scheduler::run() {
     Fiber::GetThis();
+    setThis(this); //设置当前线程的协程调度器
     ScheduleTask task;
     Fiber::ptr cb_fiber;
 
@@ -149,11 +163,9 @@ void Scheduler::run() {
         /* 调度任务，没有任务时执行idle协程 */
         if (task.fiber && task.fiber->getState() != Fiber::FIBER_TERMINATED) {
             task.fiber->resume();
-            if (task.fiber->getState() != Fiber::FIBER_TERMINATED) {
-                schedule(task.fiber);
-            } else {
-                task.fiber.reset();
-            }
+            //不关心协程resume返回之后的状态，如果没执行完，协程自己应该想办法让自己
+            //再重新加入调度，而不是调度器自作主张再把协程加进来
+            task.fiber.reset();
         } else if (task.cb) {
             if (cb_fiber) {
                 /* 直接复用原来的fiber */
@@ -161,20 +173,16 @@ void Scheduler::run() {
             } else {
                 cb_fiber.reset(new Fiber(task.cb, task.arg));
             }
+
             cb_fiber->resume();
+
             if (cb_fiber->getState() != Fiber::FIBER_TERMINATED) {
-                schedule(cb_fiber);
                 cb_fiber.reset();
             } else {
                 /* 协程结束不回收协程对象，便于下次复用 */
                 cb_fiber->reset(nullptr);
             }
         } else {
-            /* 当前无任务调度，且停止标志被设置，直接结束调度线程 */
-            if (m_stop) {
-                break;
-            }
-
             /* 未停止，但无任务可调度，运行idle协程 */
             SYLAR_ASSERT(m_tasks.empty());
             Fiber::ptr idle_fiber(new Fiber(std::bind(&Scheduler::idle, this)));
@@ -191,6 +199,11 @@ void Scheduler::run() {
             //     SYLAR_LOG_INFO(g_logger) << "Schedules thread exit";
             //     break;
             // }
+
+            /* 当前无任务调度，且停止标志被设置，直接结束调度线程 */
+            if (m_stop && m_tasks.empty() && m_iofds == 1) {
+                break;
+            }
         }
     } // end while(true)
 } // end Scheduler::run()
@@ -283,8 +296,11 @@ int Scheduler::io_schedule(int fd, int op, uint32_t events, ScheduleTask task) {
         return -1;
     }
 
-    if (op == EPOLL_CTL_DEL) {
+    if (op == EPOLL_CTL_ADD) {
+        ++m_iofds;
+    } else if (op == EPOLL_CTL_DEL) {
         fd_ctx->reset();
+        --m_iofds;
     }
 
     return 0;
@@ -296,13 +312,7 @@ int Scheduler::timer_schedule(Timer::ptr timer, int op) {
         return -1;
     }
 
-    Timer::TimerContext *pContext = new Timer::TimerContext;
-    SYLAR_ASSERT(pContext != nullptr);
-    pContext->fd   = timer->getcontext().fd;
-    pContext->task = timer->getcontext().task;
-    Fiber::ptr fiber(new Fiber(&Timer::timer_proc, pContext));
-
-    return io_schedule(pContext->fd, op, EPOLLIN | EPOLLET, fiber);
+    return io_schedule(timer->getFd(), op, EPOLLIN | EPOLLET, timer->getTask());
 } // end Scheduler::timer_schedule
 
 } // end namespace sylar

@@ -78,21 +78,22 @@ Fiber::Fiber(std::function<void(void *)> cb, void *arg, size_t stacksize)
         SYLAR_ASSERT2(false, "getcontext");
     }
 
+    // g_logger->setLevel(LogLevel::UNKNOWN); //调试时打开
     m_ctx.uc_link          = nullptr;
     m_ctx.uc_stack.ss_sp   = m_stack;
     m_ctx.uc_stack.ss_size = m_stacksize;
 
     makecontext(&m_ctx, (void (*)()) & Fiber::MainFunc, 1, m_arg);
-    // SYLAR_LOG_INFO(g_logger) << "construct fibler: " << m_id;
+    SYLAR_LOG_DEBUG(g_logger) << "construct fibler: " << m_id;
 }
 
 Fiber::~Fiber() {
-    // SYLAR_LOG_INFO(g_logger) << "destruct fiber: " << m_id;
+    SYLAR_LOG_DEBUG(g_logger) << "destruct fiber: " << m_id;
     --s_fiber_count;
     if (m_stack) {
         SYLAR_ASSERT(m_state == FIBER_INIT || m_state == FIBER_TERMINATED);
         StackAllocator::Dealloc(m_stack, m_stacksize);
-        // SYLAR_LOG_INFO(g_logger) << "dealloc stack: " << m_id;
+        SYLAR_LOG_DEBUG(g_logger) << "dealloc stack: " << m_id;
     } else {                 //没有栈，说明是线程的主协程
         SYLAR_ASSERT(!m_cb); //主协程没有cb
         SYLAR_ASSERT(m_state == FIBER_RUNNING); //主协程一定是执行状态

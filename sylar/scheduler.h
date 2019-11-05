@@ -33,6 +33,9 @@ public:
         scheduler      = nullptr;
         event.events   = 0;
         event.data.u32 = 0;
+        task.cb        = nullptr;
+        task.fiber     = nullptr;
+        task.arg       = nullptr;
     }
 }; // end struct FdContext
 
@@ -121,6 +124,9 @@ public:
 
     const std::string &getName() const { return m_name; }
 
+    static Scheduler *getThis();
+    static void setThis(Scheduler *psc);
+
 protected:
     /* 通知协程调度器有任务了 */
     void tickle();
@@ -148,7 +154,8 @@ private:
 
     /* 文件描述符上下文集合，用于IO事件调度*/
     std::vector<FdContext *> m_fdContexts;
-}; // end class Scheduler
+    int m_iofds; //当前参与IO调度的描述符个数
+};               // end class Scheduler
 
 } // end namespace sylar
 

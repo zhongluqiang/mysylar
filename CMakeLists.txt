@@ -100,5 +100,11 @@ target_link_libraries(test_io_schedule ${LIBS})
 #timerfd接口测试
 add_executable(test_timerfd tests/test_timerfd.cpp)
 
+#Hook系统调用测试
+add_executable(test_timer_schedule tests/test_timer_schedule.cpp)
+#force_redefine_file_macro_for_sources(test_timer_schedule)
+add_dependencies(test_timer_schedule sylar)
+target_link_libraries(test_timer_schedule ${LIBS})
+
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
