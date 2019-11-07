@@ -30,14 +30,17 @@ set(
     sylar/scheduler.cpp
     sylar/timer.h 
     sylar/timer.cpp 
+    sylar/hook_sys_call.h 
+    sylar/hook_sys_call.cpp 
     )
 
 set(
     LIBS 
 
     sylar 
-    yaml-cpp 
+    dl
     pthread
+    yaml-cpp 
 )
 
 add_library(sylar SHARED ${LIB_SRC})
@@ -100,11 +103,17 @@ target_link_libraries(test_io_schedule ${LIBS})
 #timerfd接口测试
 add_executable(test_timerfd tests/test_timerfd.cpp)
 
-#Hook系统调用测试
+#定时器测试
 add_executable(test_timer_schedule tests/test_timer_schedule.cpp)
 #force_redefine_file_macro_for_sources(test_timer_schedule)
 add_dependencies(test_timer_schedule sylar)
 target_link_libraries(test_timer_schedule ${LIBS})
+
+#hook系统调用测试
+add_executable(test_hook tests/test_hook.cpp)
+#force_redefine_file_macro_for_sources(test_hook)
+add_dependencies(test_hook sylar)
+target_link_libraries(test_hook ${LIBS})
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)

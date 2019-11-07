@@ -1,4 +1,5 @@
 #include "scheduler.h"
+#include "hook_sys_call.h"
 #include "macro.h"
 #include <errno.h>
 #include <fcntl.h> /* Obtain O_* constant definitions */
@@ -139,6 +140,7 @@ void Scheduler::idle() {
 }
 
 void Scheduler::run() {
+    enable_hook_sys_call();
     Fiber::GetThis();
     setThis(this); //设置当前线程的协程调度器
     ScheduleTask task;
