@@ -32,6 +32,8 @@ set(
     sylar/timer.cpp 
     sylar/hook_sys_call.h 
     sylar/hook_sys_call.cpp 
+    sylar/address.h 
+    sylar/address.cpp
     )
 
 set(
@@ -114,6 +116,12 @@ add_executable(test_hook tests/test_hook.cpp)
 #force_redefine_file_macro_for_sources(test_hook)
 add_dependencies(test_hook sylar)
 target_link_libraries(test_hook ${LIBS})
+
+#address类测试
+add_executable(test_address tests/test_address.cpp)
+#force_redefine_file_macro_for_sources(test_address)
+add_dependencies(test_address sylar)
+target_link_libraries(test_address ${LIBS})
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
