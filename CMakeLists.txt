@@ -33,7 +33,9 @@ set(
     sylar/hook_sys_call.h 
     sylar/hook_sys_call.cpp 
     sylar/address.h 
-    sylar/address.cpp
+    sylar/address.cpp 
+    sylar/socket.h 
+    sylar/socket.cpp
     )
 
 set(
@@ -122,6 +124,12 @@ add_executable(test_address tests/test_address.cpp)
 #force_redefine_file_macro_for_sources(test_address)
 add_dependencies(test_address sylar)
 target_link_libraries(test_address ${LIBS})
+
+#socket类测试
+add_executable(test_socket tests/test_socket.cpp)
+#force_redefine_file_macro_for_sources(test_socket)
+add_dependencies(test_socket sylar)
+target_link_libraries(test_socket ${LIBS})
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
