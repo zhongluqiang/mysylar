@@ -36,6 +36,8 @@ set(
     sylar/address.cpp 
     sylar/socket.h 
     sylar/socket.cpp
+    sylar/http/http.h 
+    sylar/http/http.cpp
     )
 
 set(
@@ -130,6 +132,12 @@ add_executable(test_socket tests/test_socket.cpp)
 #force_redefine_file_macro_for_sources(test_socket)
 add_dependencies(test_socket sylar)
 target_link_libraries(test_socket ${LIBS})
+
+#http类测试
+add_executable(test_http tests/test_http.cpp)
+#force_redefine_file_macro_for_sources(test_http)
+add_dependencies(test_http sylar)
+target_link_libraries(test_http ${LIBS})
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)

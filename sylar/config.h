@@ -280,8 +280,8 @@ public:
             new ConfigVar<T>(name, default_value, description));
         s_configs[name] = v;
 
-        SYLAR_LOG_INFO(SYLAR_LOG_ROOT())
-            << "add config: " << name << ", default value: " << v->toString();
+        // SYLAR_LOG_INFO(SYLAR_LOG_ROOT())
+        //    << "add config: " << name << ", default value: " << v->toString();
 
         return v;
     }
