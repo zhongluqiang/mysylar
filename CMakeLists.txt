@@ -40,6 +40,11 @@ set(
     sylar/http/http.cpp
     sylar/tcp_server.h 
     sylar/tcp_server.cpp 
+    sylar/http/http11_common.h 
+    sylar/http/http11_parser.h
+    sylar/http/http11_parser.cpp 
+    sylar/http/httpclient_parser.h 
+    sylar/http/httpclient_parser.cpp 
     )
 
 set(
