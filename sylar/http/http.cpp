@@ -14,7 +14,7 @@ HttpMethod StringToHttpMethod(const std::string &m) {
 
 HttpMethod CharsToHttpMethod(const char *m) {
 #define XX(num, name, string)                                                  \
-    if (strcmp(#string, m) == 0) {                                             \
+    if (strncmp(#string, m, strlen(#string)) == 0) {                                             \
         return HttpMethod::name;                                               \
     }
     HTTP_METHOD_MAP(XX)
