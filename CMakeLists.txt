@@ -47,6 +47,7 @@ set(
     sylar/http/httpclient_parser.cpp
     sylar/http/http_parser.h 
     sylar/http/http_parser.cpp 
+    sylar/endian.h 
     )
 
 set(
@@ -159,6 +160,12 @@ add_executable(test_http_parser tests/test_http_parser.cpp)
 #force_redefine_file_macro_for_sources(test_http_parser)
 add_dependencies(test_http_parser sylar)
 target_link_libraries(test_http_parser ${LIBS})
+
+#大小端测试
+add_executable(test_endian tests/test_endian.cpp)
+#force_redefine_file_macro_for_sources(test_endian)
+add_dependencies(test_endian sylar)
+target_link_libraries(test_endian ${LIBS})
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
