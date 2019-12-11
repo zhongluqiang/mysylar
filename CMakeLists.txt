@@ -48,6 +48,8 @@ set(
     sylar/http/http_parser.h 
     sylar/http/http_parser.cpp 
     sylar/endian.h 
+    sylar/bytearray.h 
+    sylar/bytearray.cpp 
     )
 
 set(
@@ -166,6 +168,12 @@ add_executable(test_endian tests/test_endian.cpp)
 #force_redefine_file_macro_for_sources(test_endian)
 add_dependencies(test_endian sylar)
 target_link_libraries(test_endian ${LIBS})
+
+#ByteArray测试
+add_executable(test_bytearray tests/test_bytearray.cpp)
+#force_redefine_file_macro_for_sources(test_bytearray)
+add_dependencies(test_bytearray sylar)
+target_link_libraries(test_bytearray ${LIBS})
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
