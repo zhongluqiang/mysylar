@@ -50,6 +50,10 @@ set(
     sylar/endian.h 
     sylar/bytearray.h 
     sylar/bytearray.cpp 
+    sylar/stream.h 
+    sylar/stream.cpp 
+    sylar/socket_stream.h 
+    sylar/socket_stream.cpp 
     )
 
 set(

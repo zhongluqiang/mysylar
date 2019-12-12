@@ -32,10 +32,12 @@ public:
     bool close();
 
     int send(const void *buffer, size_t length, int flags = 0);
+    int send(const iovec *buffers, size_t length, int flags = 0);
     int sendTo(const void *buffer, size_t length, const Address::ptr to,
                int flags = 0);
 
     int recv(void *buffer, size_t length, int flags = 0);
+    int recv(iovec *buffers, size_t length, int flags = 0);
     int recvFrom(void *buffer, size_t length, Address::ptr from, int flags = 0);
 
     Address::ptr getReomteAddress();

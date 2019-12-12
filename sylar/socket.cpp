@@ -173,6 +173,17 @@ int Socket::send(const void *buffer, size_t length, int flags) {
     return -1;
 }
 
+int Socket::send(const iovec *buffers, size_t length, int flags) {
+    if (isConnected()) {
+        msghdr msg;
+        memset(&msg, 0, sizeof(msg));
+        msg.msg_iov    = (iovec *)buffers;
+        msg.msg_iovlen = length;
+        return ::sendmsg(m_sock, &msg, flags);
+    }
+    return -1;
+}
+
 int Socket::sendTo(const void *buffer, size_t length, const Address::ptr to,
                    int flags) {
     if (isConnected()) {
@@ -185,6 +196,17 @@ int Socket::sendTo(const void *buffer, size_t length, const Address::ptr to,
 int Socket::recv(void *buffer, size_t length, int flags) {
     if (isConnected()) {
         return ::recv(m_sock, buffer, length, flags);
+    }
+    return -1;
+}
+
+int Socket::recv(iovec *buffers, size_t length, int flags) {
+    if (isConnected()) {
+        msghdr msg;
+        memset(&msg, 0, sizeof(msg));
+        msg.msg_iov    = (iovec *)buffers;
+        msg.msg_iovlen = length;
+        return ::recvmsg(m_sock, &msg, flags);
     }
     return -1;
 }
