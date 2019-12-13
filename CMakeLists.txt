@@ -54,6 +54,8 @@ set(
     sylar/stream.cpp 
     sylar/socket_stream.h 
     sylar/socket_stream.cpp 
+    sylar/http/http_session.h 
+    sylar/http/http_session.cpp 
     )
 
 set(
