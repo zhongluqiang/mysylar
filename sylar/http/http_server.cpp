@@ -7,7 +7,8 @@ namespace http {
 static sylar::Logger::ptr g_logger = SYLAR_LOG_NAME("system");
 
 HttpServer::HttpServer(bool keepalive)
-    : m_isKeepalive(keepalive) {}
+    : m_isKeepalive(keepalive)
+    , m_dispatch(new ServletDispatch) {}
 
 void HttpServer::handleClient(Socket::ptr client) {
     HttpSession::ptr session(new HttpSession(client));
@@ -23,7 +24,11 @@ void HttpServer::handleClient(Socket::ptr client) {
         HttpResponse::ptr rsp(new HttpResponse(
             req->getVersion(), req->isClose() || !m_isKeepalive));
         rsp->setHeader("Server", getName());
-        rsp->setBody("hello mysylar");
+
+        NotFoundServlet::ptr slt(new NotFoundServlet);
+
+        m_dispatch->handle(req, rsp, session);
+
         session->sendResponse(rsp);
         if (!m_isKeepalive || req->isClose()) {
             break;

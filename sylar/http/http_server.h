@@ -3,6 +3,7 @@
 
 #include "http_session.h"
 #include "sylar/tcp_server.h"
+#include "servlet.h"
 
 namespace sylar {
 namespace http {
@@ -19,6 +20,8 @@ protected:
 private:
     // 是否支持长连接
     bool m_isKeepalive;
+    ServletDispatch::ptr m_dispatch;
+
 };
 } // namespace http
 } // namespace sylar

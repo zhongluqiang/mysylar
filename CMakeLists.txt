@@ -58,6 +58,8 @@ set(
     sylar/http/http_session.cpp 
     sylar/http/http_server.h 
     sylar/http/http_server.cpp 
+    sylar/http/servlet.h 
+    sylar/http/servlet.cpp 
     )
 
 set(
