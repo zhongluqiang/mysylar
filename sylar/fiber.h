@@ -13,10 +13,9 @@ public:
     typedef std::shared_ptr<Fiber> ptr;
 
     enum State {
-        FIBER_INIT,      //刚创建协程时的状态
-        FIBER_RUNNING,   //运行状态
-        FIBER_PENDING,   //阻塞状态
-        FIBER_TERMINATED //结束状态
+        READY,   // 就绪态，刚创建或者yield之后的状态
+        RUNNING, // 运行态，resume之后的状态
+        TERM // 结束态，协程的回调函数执行完之后为TERM状态
     };
 
 private:
@@ -25,7 +24,8 @@ private:
 
 public:
     //公共构造函数用于创建用户协程，需要分配栈
-    Fiber(std::function<void()> cb, size_t stacksize = 0);
+    Fiber(std::function<void()> cb, size_t stacksize = 0,
+          bool run_in_scheduler = true);
     ~Fiber();
 
     //重置协程状态和入口函数，复用栈空间，不重新创建栈
@@ -34,12 +34,16 @@ public:
     //把目标协程和当前正在执行的协程进行交换，使其进入运行状态
     void resume();
 
-    //协程让出执行权，并且设置状态为FIBER_PENDING
+    //协程让出执行权，并且设置状态为READY
     void yield();
 
-    //返回某个协程的协程号
+    /// 和指定的协程进行swap，目标协程会被执行，当前协程挂起
+    // void yieldto(Fiber *f);
+
+    //返回某个协程的协程号和协程状态
     uint64_t getId() const { return m_id; }
     State getState() const { return m_state; }
+    std::string getStateAsString();
 
 public:
     //设置当前正在运行的协程，即设置线程局部变量t_fiber的值
@@ -60,14 +64,16 @@ public:
     static uint64_t GetFiberId();
 
 private:
-    uint64_t m_id        = 0;          //协程号
-    uint32_t m_stacksize = 0;          //协程栈大小
-    State m_state        = FIBER_INIT; //协程状态
+    uint64_t m_id        = 0;     //协程号
+    uint32_t m_stacksize = 0;     //协程栈大小
+    State m_state        = READY; //协程状态
 
     ucontext_t m_ctx;        //协程上下文
     void *m_stack = nullptr; //协程栈
 
     std::function<void()> m_cb; //协程入口
+
+    bool m_runInScheduler; // 该协程是否参与调度器调度
 };
 
 } // namespace sylar

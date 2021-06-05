@@ -364,7 +364,7 @@ Logger::Logger(const std::string &name)
 
 // 某个logger没有appender时，使用root logger进行输出 ？？
 void Logger::log(LogLevel::Level level, LogEvent::ptr event) {
-    if (level > m_level) {
+    if (level >= m_level) {
         MutexType::Lock lock(m_mutex);
         auto self = shared_from_this();
         if (!m_appenders.empty()) {

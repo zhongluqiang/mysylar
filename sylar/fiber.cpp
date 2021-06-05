@@ -2,15 +2,23 @@
 #include "config.h"
 #include "log.h"
 #include "macro.h"
+#include "scheduler.h"
 #include <atomic>
 
 namespace sylar {
 
 static Logger::ptr g_logger = SYLAR_LOG_NAME("system");
 
+namespace {
+struct __Initer {
+    __Initer() { g_logger->setLevel(LogLevel::INFO); }
+};
+static __Initer __init;
+} // namespace
+
 //全局静态变量，用于生成协程id
 static std::atomic<uint64_t> s_fiber_id{0};
-//全局静态变量，用于统计当前线程的协程数
+//全局静态变量，用于统计当前的协程数
 static std::atomic<uint64_t> s_fiber_count{0};
 
 //线程局部变量，当前线程正在运行的协程
@@ -39,9 +47,21 @@ uint64_t Fiber::GetFiberId() {
     return 0;
 }
 
+std::string Fiber::getStateAsString() {
+    switch (m_state) {
+    case READY:
+        return "READY";
+    case RUNNING:
+        return "RUNNING";
+    case TERM:
+        return "TERM";
+    }
+    return "YOU FUCKED UP";
+}
+
 //使用默认构造函数的协程对象一定是线程的第一个协程，也就是主协程
 Fiber::Fiber() {
-    m_state = FIBER_RUNNING;
+    m_state = RUNNING;
 
     SetThis(this);
 
@@ -50,6 +70,9 @@ Fiber::Fiber() {
     }
 
     ++s_fiber_count;
+    m_id = s_fiber_id++; // id从0开始，用完加1
+
+    SYLAR_LOG_DEBUG(g_logger) << "Fiber::Fiber() main id = " << m_id;
 }
 
 void Fiber::SetThis(Fiber *f) { t_fiber = f; }
@@ -66,9 +89,10 @@ Fiber::ptr Fiber::GetThis() {
 }
 
 //带参数的构造函数用于创建其他协程，需要分配栈
-Fiber::Fiber(std::function<void()> cb, size_t stacksize)
-    : m_id(++s_fiber_id)
-    , m_cb(cb) {
+Fiber::Fiber(std::function<void()> cb, size_t stacksize, bool run_in_scheduler)
+    : m_id(s_fiber_id++)
+    , m_cb(cb)
+    , m_runInScheduler(run_in_scheduler) {
     ++s_fiber_count;
     m_stacksize = stacksize ? stacksize : g_fiber_stacksize->getValue();
     m_stack     = StackAllocator::Alloc(m_stacksize);
@@ -82,19 +106,22 @@ Fiber::Fiber(std::function<void()> cb, size_t stacksize)
     m_ctx.uc_stack.ss_size = m_stacksize;
 
     makecontext(&m_ctx, &Fiber::MainFunc, 0);
-    // SYLAR_LOG_INFO(g_logger) << "construct fibler: " << m_id;
+
+    SYLAR_LOG_DEBUG(g_logger) << "Fiber::Fiber() id = " << m_id;
 }
 
 Fiber::~Fiber() {
-    // SYLAR_LOG_INFO(g_logger) << "destruct fiber: " << m_id;
+    SYLAR_LOG_DEBUG(g_logger) << "Fiber::~Fiber() id = " << m_id;
     --s_fiber_count;
     if (m_stack) {
-        SYLAR_ASSERT(m_state == FIBER_INIT || m_state == FIBER_TERMINATED);
+        // 有栈，说明是子协程，需要确保子协程一定是结束状态
+        SYLAR_ASSERT(m_state == TERM);
         StackAllocator::Dealloc(m_stack, m_stacksize);
-        // SYLAR_LOG_INFO(g_logger) << "dealloc stack: " << m_id;
-    } else {                 //没有栈，说明是线程的主协程
-        SYLAR_ASSERT(!m_cb); //主协程没有cb
-        SYLAR_ASSERT(m_state == FIBER_RUNNING); //主协程一定是执行状态
+        SYLAR_LOG_DEBUG(g_logger) << "dealloc stack, id = " << m_id;
+    } else {
+        //没有栈，说明是线程的主协程
+        SYLAR_ASSERT(!m_cb);              //主协程没有cb
+        SYLAR_ASSERT(m_state == RUNNING); //主协程一定是执行状态
 
         Fiber *cur = t_fiber; //当前协程就是自己
         if (cur == this) {
@@ -106,7 +133,7 @@ Fiber::~Fiber() {
 //重置协程函数和状态，复用栈空间，不重新创建栈
 void Fiber::reset(std::function<void()> cb) {
     SYLAR_ASSERT(m_stack);
-    SYLAR_ASSERT(m_state == FIBER_INIT || m_state == FIBER_TERMINATED);
+    SYLAR_ASSERT(m_state == TERM);
     m_cb = cb;
     if (getcontext(&m_ctx)) {
         SYLAR_ASSERT2(false, "getcontext");
@@ -117,29 +144,41 @@ void Fiber::reset(std::function<void()> cb) {
     m_ctx.uc_stack.ss_size = m_stacksize;
 
     makecontext(&m_ctx, &Fiber::MainFunc, 0);
-    m_state = FIBER_INIT;
+    m_state = READY;
 }
 
 //把目标协程和当前正在执行的协程交换，使其进行运行状态
 void Fiber::resume() {
+    SYLAR_ASSERT(m_state != TERM && m_state != RUNNING);
     SetThis(this);
-    SYLAR_ASSERT(m_state != FIBER_RUNNING);
-    m_state = FIBER_RUNNING;
-    if (swapcontext(&(t_threadFiber->m_ctx), &m_ctx)) {
-        SYLAR_ASSERT2(false, "swapcontext");
+    m_state = RUNNING;
+    if (m_runInScheduler) {
+        if (swapcontext(&(Scheduler::GetMainFiber()->m_ctx), &m_ctx)) {
+            SYLAR_ASSERT2(false, "swapcontext");
+        }
+    } else {
+        if (swapcontext(&(t_threadFiber->m_ctx), &m_ctx)) {
+            SYLAR_ASSERT2(false, "swapcontext");
+        }
     }
 }
 
 //从当前协程切回线程的主协程
 void Fiber::yield() {
-    SetThis(t_threadFiber.get());
     //线程运行完之后还会再yield一次，用于回到主协程，此时状态已为结束状态
-    if (m_state != FIBER_TERMINATED) {
-        m_state = FIBER_PENDING;
+    SYLAR_ASSERT(m_state == RUNNING || m_state == TERM);
+    SetThis(t_threadFiber.get());
+    if (m_state != TERM) {
+        m_state = READY;
     }
-
-    if (swapcontext(&m_ctx, &(t_threadFiber->m_ctx))) {
-        SYLAR_ASSERT2(false, "swapcontext");
+    if (m_runInScheduler) {
+        if (swapcontext(&m_ctx, &(Scheduler::GetMainFiber()->m_ctx))) {
+            SYLAR_ASSERT2(false, "swapcontext");
+        }
+    } else {
+        if (swapcontext(&m_ctx, &(t_threadFiber->m_ctx))) {
+            SYLAR_ASSERT2(false, "swapcontext");
+        }
     }
 }
 
@@ -148,25 +187,18 @@ void Fiber::MainFunc() {
         GetThis(); // GetThis()的shared_from_this()方法让引用计数加1
     SYLAR_ASSERT(cur);
 
-    try {
-        cur->m_cb();
-        cur->m_cb    = nullptr;
-        cur->m_state = FIBER_TERMINATED;
-    } catch (const std::exception &e) {
-        cur->m_state = FIBER_TERMINATED;
-        SYLAR_LOG_ERROR(g_logger) << "Fiber Except: " << e.what()
-                                  << "fiber_id=" << cur->getId() << std::endl
-                                  << sylar::BacktraceToString(10);
-    } catch (...) {
-        cur->m_state = FIBER_TERMINATED;
-        SYLAR_LOG_ERROR(g_logger) << "Fiber Except"
-                                  << " fiber_id=" << cur->getId() << std::endl
-                                  << sylar::BacktraceToString(10);
-    }
+    cur->m_cb();
+    cur->m_cb    = nullptr;
+    cur->m_state = TERM;
 
     auto raw_ptr = cur.get(); //手动让t_fiber的引用计数减1
     cur.reset();
     raw_ptr->yield();
+    // if (raw_ptr->m_runInScheduler) {
+    //     raw_ptr->yieldto(Scheduler::GetMainFiber());
+    // } else {
+    //     raw_ptr->yield();
+    // }
 }
 
 } // namespace sylar

@@ -80,9 +80,15 @@ add_executable(test_fiber tests/test_fiber.cpp)
 add_dependencies(test_fiber sylar)
 target_link_libraries(test_fiber ${LIBS})
 
+#fiber类测试
+add_executable(test_fiber2 tests/test_fiber2.cpp)
+#force_redefine_file_macro_for_sources(test_fiber)
+add_dependencies(test_fiber2 sylar)
+target_link_libraries(test_fiber2 ${LIBS})
+
 #scheduler类测试
 add_executable(test_scheduler tests/test_scheduler.cpp)
-#force_redefine_file_macro_for_sources(test_scheduler)
+force_redefine_file_macro_for_sources(test_scheduler)
 add_dependencies(test_scheduler sylar)
 target_link_libraries(test_scheduler ${LIBS})
 

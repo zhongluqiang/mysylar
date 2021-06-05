@@ -22,10 +22,11 @@ void run_in_fiber() {
 }
 
 void test_fiber() {
+    g_logger->setLevel(sylar::LogLevel::DEBUG);
     SYLAR_LOG_INFO(g_logger) << "test_fiber begin";
 
     sylar::Fiber::GetThis();
-    sylar::Fiber::ptr fiber(new sylar::Fiber(run_in_fiber));
+    sylar::Fiber::ptr fiber(new sylar::Fiber(run_in_fiber, 0, false));
     SYLAR_LOG_INFO(g_logger) << "use_coun:" << fiber.use_count(); // 1
     SYLAR_LOG_INFO(g_logger) << "before test_fiber resume";
     fiber->resume();
@@ -37,14 +38,14 @@ void test_fiber() {
     SYLAR_LOG_INFO(g_logger) << "use_coun:" << fiber.use_count(); // 3
 
     SYLAR_LOG_INFO(g_logger)
-        << "fiber status: " << fiber->getState(); // FIBER_PENDING
+        << "fiber status: " << fiber->getStateAsString(); // FIBER_PENDING
 
     SYLAR_LOG_INFO(g_logger) << "before test_fiber resume again";
     fiber->resume();
     SYLAR_LOG_INFO(g_logger) << "after test_fiber resume again";
     SYLAR_LOG_INFO(g_logger) << "use_coun:" << fiber.use_count(); // 1
     SYLAR_LOG_INFO(g_logger)
-        << "fiber status: " << fiber->getState(); // FIBER_TERMINATED
+        << "fiber status: " << fiber->getStateAsString(); // FIBER_TERMINATED
 
     fiber->reset(
         run_in_fiber2); //上一个协程结束之后，复用其栈空间再创建一个新协程
